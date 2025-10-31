@@ -9,7 +9,8 @@
         "dist/**",
         ".next/**",
         "!.next/cache/**"
-      ]
+      ],
+      "env": ["DATABASE_URL", "NODE_ENV"]
     },
     "lint": {
       "dependsOn": ["^lint"]
@@ -22,6 +23,10 @@
       "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
+    },
+    "migrate:deploy": {
+      "cache": false,
+      "dependsOn": []
     }
   }
 }
