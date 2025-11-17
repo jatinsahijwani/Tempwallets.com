@@ -25,6 +25,10 @@ const CHAIN_NAMES: Record<string, string> = {
   arbitrumErc4337: "Arbitrum (ERC-4337)",
   polygonErc4337: "Polygon (ERC-4337)",
   avalancheErc4337: "Avalanche (ERC-4337)",
+  // Polkadot EVM Compatible chains
+  moonbeamTestnet: "Moonbeam Testnet",
+  astarShibuya: "Astar Shibuya",
+  paseoPassetHub: "Paseo PassetHub",
 };
 
 const NATIVE_TOKEN_SYMBOLS: Record<string, string> = {
@@ -43,6 +47,10 @@ const NATIVE_TOKEN_SYMBOLS: Record<string, string> = {
   arbitrumErc4337: 'ETH',
   polygonErc4337: 'MATIC',
   avalancheErc4337: 'AVAX',
+  // Polkadot EVM Compatible chains
+  moonbeamTestnet: 'DEV',
+  astarShibuya: 'SBY',
+  paseoPassetHub: 'PAS',
 };
 
 const getNativeTokenSymbol = (chain: string): string => {
@@ -63,7 +71,18 @@ interface ChainBalance {
   nativeDecimals: number;
   nativeBalanceHuman?: string;
   tokens: (TokenBalance & { balanceHuman?: string })[];
+  category?: string;
 }
+
+// Polkadot EVM compatible chains
+const POLKADOT_EVM_CHAINS = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
+
+const getChainCategory = (chain: string): string | undefined => {
+  if (POLKADOT_EVM_CHAINS.includes(chain)) {
+    return 'polkadot-evm';
+  }
+  return undefined;
+};
 
 export default function TransactionsPage() {
   const { fingerprint } = useBrowserFingerprint();
@@ -98,7 +117,8 @@ export default function TransactionsPage() {
           nativeBalance: '0', 
           nativeDecimals: 18,
           nativeBalanceHuman: undefined,
-          tokens: []
+          tokens: [],
+          category: getChainCategory(a.chain)
         };
         if (a.address === null) {
           // Native token - use actual decimals from API
@@ -118,7 +138,24 @@ export default function TransactionsPage() {
         map.set(a.chain, existing);
       }
 
-      setChainBalances(Array.from(map.values()));
+      const balances = Array.from(map.values());
+      
+      // Ensure Polkadot EVM chains are always present, even with zero balance
+      const existingPolkadotChains = balances.filter(cb => cb.category === 'polkadot-evm').map(cb => cb.chain);
+      POLKADOT_EVM_CHAINS.forEach(chain => {
+        if (!existingPolkadotChains.includes(chain)) {
+          balances.push({
+            chain,
+            nativeBalance: '0',
+            nativeDecimals: 18,
+            nativeBalanceHuman: undefined,
+            tokens: [],
+            category: 'polkadot-evm'
+          });
+        }
+      });
+      
+      setChainBalances(balances);
     } catch (err) {
       const errorMessage = err instanceof ApiError ? err.message : 'Failed to load balances. Please try again.';
       setError(errorMessage);
@@ -217,7 +254,11 @@ export default function TransactionsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {chainBalances
                     .filter((chainBalance) => {
-                      // Only show chains with non-zero balance
+                      // For Polkadot EVM chains, always show (even with zero balance)
+                      if (chainBalance.category === 'polkadot-evm') {
+                        return true;
+                      }
+                      // For other chains, only show if they have non-zero balance
                       const nativeBalance = parseFloat(chainBalance.nativeBalance);
                       const hasTokenBalance = chainBalance.tokens.some(token => parseFloat(token.balance) > 0);
                       return nativeBalance > 0 || hasTokenBalance;
@@ -259,6 +300,12 @@ export default function TransactionsPage() {
                                 {token.formatted} {token.symbol}
                               </p>
                             ))}
+                            {/* Show "No balance" for Polkadot EVM chains with zero balance */}
+                            {chainBalance.category === 'polkadot-evm' && 
+                             parseFloat(chainBalance.nativeBalance) === 0 && 
+                             formattedTokens.length === 0 && (
+                              <p className="text-sm text-muted-foreground">No balance</p>
+                            )}
                         </div>
                       </div>
                       <Button

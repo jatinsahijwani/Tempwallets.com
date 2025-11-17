@@ -36,6 +36,13 @@ export class AddressManager implements IAddressManager {
     'arbitrum',
     'polygon',
     'avalanche',
+    'moonbeamTestnet',
+    'astarShibuya',
+    'paseoPassetHub',
+    'hydration',
+    'unique',
+    'bifrost',
+    'bifrostTestnet',
   ];
 
   private readonly erc4337Chains: WalletAddressKey[] = [
@@ -89,6 +96,9 @@ export class AddressManager implements IAddressManager {
       'arbitrum',
       'polygon',
       'avalanche',
+      'moonbeamTestnet',
+      'astarShibuya',
+      'paseoPassetHub',
       'tron',
       'bitcoin',
       'solana',
@@ -206,6 +216,9 @@ export class AddressManager implements IAddressManager {
       { name: 'arbitrum', chain: 'arbitrum' },
       { name: 'polygon', chain: 'polygon' },
       { name: 'avalanche', chain: 'avalanche' },
+      { name: 'moonbeamTestnet', chain: 'moonbeamTestnet' },
+      { name: 'astarShibuya', chain: 'astarShibuya' },
+      { name: 'paseoPassetHub', chain: 'paseoPassetHub' },
       { name: 'tron', chain: 'tron' },
       { name: 'bitcoin', chain: 'bitcoin' },
       { name: 'solana', chain: 'solana' },
@@ -307,7 +320,32 @@ export class AddressManager implements IAddressManager {
       };
     };
 
-    this.eoaChains.forEach((chain) => assign(chain, 'eoa', false));
+    // Standard EOA chains (not visible by default)
+    const standardEoaChains = this.eoaChains.filter(
+      (chain) =>
+        ![
+          'moonbeamTestnet',
+          'astarShibuya',
+          'paseoPassetHub',
+          'hydration',
+          'unique',
+          'bifrost',
+          'bifrostTestnet',
+        ].includes(chain),
+    );
+    standardEoaChains.forEach((chain) => assign(chain, 'eoa', false));
+    
+    // Polkadot EVM chains (visible)
+    const polkadotEvmChains: WalletAddressKey[] = [
+      'moonbeamTestnet',
+      'astarShibuya',
+      'paseoPassetHub',
+      'hydration',
+      'unique',
+      'bifrost',
+      'bifrostTestnet',
+    ];
+    polkadotEvmChains.forEach((chain) => assign(chain, 'eoa', true));
     this.erc4337Chains.forEach((chain) => assign(chain, 'erc4337', true));
     this.nonEvmChains.forEach((chain) => assign(chain, 'nonEvm', true));
 
@@ -327,6 +365,13 @@ export class AddressManager implements IAddressManager {
       tron: 'Tron',
       bitcoin: 'Bitcoin',
       solana: 'Solana',
+      moonbeamTestnet: 'Moonbeam Testnet',
+      astarShibuya: 'Astar Shibuya',
+      paseoPassetHub: 'Paseo PassetHub',
+      hydration: 'Hydration',
+      unique: 'Unique',
+      bifrost: 'Bifrost Mainnet',
+      bifrostTestnet: 'Bifrost Testnet',
       ethereumErc4337: 'Ethereum Smart Account',
       baseErc4337: 'Base Smart Account',
       arbitrumErc4337: 'Arbitrum Smart Account',

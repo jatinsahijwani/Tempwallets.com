@@ -17,12 +17,16 @@ import {
   SendCryptoDto,
   WalletConnectSignDto,
 } from './dto/wallet.dto.js';
+import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
 
 @Controller('wallet')
 export class WalletController {
   private readonly logger = new Logger(WalletController.name);
 
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly polkadotEvmRpcService: PolkadotEvmRpcService,
+  ) {}
 
   @Post('seed')
   async createOrImportSeed(@Body() dto: CreateOrImportSeedDto) {
@@ -358,6 +362,111 @@ export class WalletController {
       );
       this.logger.error(
         `Stack trace: ${error instanceof Error ? error.stack : 'No stack trace'}`,
+      );
+      throw error;
+    }
+  }
+
+  @Get('test-rpc-balance')
+  async testRpcBalance(
+    @Query('userId') userId: string,
+    @Query('chain') chain: string,
+  ) {
+    this.logger.log(`Testing RPC balance for user ${userId} on chain ${chain}`);
+
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    if (!chain) {
+      throw new BadRequestException('chain is required');
+    }
+
+    const validChains = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
+    if (!validChains.includes(chain)) {
+      throw new BadRequestException(
+        `chain must be one of: ${validChains.join(', ')}`,
+      );
+    }
+
+    try {
+      const addresses = await this.walletService.getAddresses(userId);
+      const address = addresses.ethereum;
+
+      if (!address) {
+        throw new BadRequestException('No Ethereum address found for user');
+      }
+
+      const balance = await this.polkadotEvmRpcService.getNativeBalance(
+        address,
+        chain,
+      );
+
+      return {
+        chain,
+        address,
+        balance,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to test RPC balance: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  @Get('test-rpc-transactions')
+  async testRpcTransactions(
+    @Query('userId') userId: string,
+    @Query('chain') chain: string,
+    @Query('limit') limit?: string,
+  ) {
+    this.logger.log(
+      `Testing RPC transactions for user ${userId} on chain ${chain}`,
+    );
+
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    if (!chain) {
+      throw new BadRequestException('chain is required');
+    }
+
+    const validChains = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
+    if (!validChains.includes(chain)) {
+      throw new BadRequestException(
+        `chain must be one of: ${validChains.join(', ')}`,
+      );
+    }
+
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+      throw new BadRequestException('limit must be between 1 and 100');
+    }
+
+    try {
+      const addresses = await this.walletService.getAddresses(userId);
+      const address = addresses.ethereum;
+
+      if (!address) {
+        throw new BadRequestException('No Ethereum address found for user');
+      }
+
+      const transactions =
+        await this.polkadotEvmRpcService.getTransactions(
+          address,
+          chain,
+          limitNum,
+        );
+
+      return {
+        chain,
+        address,
+        transactions,
+        count: transactions.length,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to test RPC transactions: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
     }

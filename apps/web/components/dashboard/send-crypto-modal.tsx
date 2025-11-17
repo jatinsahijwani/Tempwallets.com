@@ -44,6 +44,10 @@ const CHAIN_NAMES: Record<string, string> = {
   polygon: "Polygon",
   avalancheErc4337: "Avalanche (ERC-4337)",
   avalanche: "Avalanche",
+  // Polkadot EVM Compatible chains
+  moonbeamTestnet: "Moonbeam Testnet",
+  astarShibuya: "Astar Shibuya",
+  paseoPassetHub: "Paseo PassetHub",
 };
 
 // Address validation per chain type

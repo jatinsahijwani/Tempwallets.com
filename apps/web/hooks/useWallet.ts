@@ -6,6 +6,7 @@ export interface WalletData {
   name: string;
   address: string;
   chain: string;
+  category?: string;
 }
 
 export interface UseWalletReturn {
@@ -55,6 +56,7 @@ export function useWallet(): UseWalletReturn {
         name: entry.label || entry.chain,
         address: entry.address,
         chain: entry.chain,
+        category: entry.category,
       });
     });
 

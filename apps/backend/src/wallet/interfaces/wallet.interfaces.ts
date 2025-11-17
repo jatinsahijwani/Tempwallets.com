@@ -17,6 +17,13 @@ export interface WalletAddresses {
   tron: string;
   bitcoin: string;
   solana: string;
+  moonbeamTestnet: string;
+  astarShibuya: string;
+  paseoPassetHub: string;
+  hydration: string;
+  unique: string;
+  bifrost: string;
+  bifrostTestnet: string;
   ethereumErc4337: string;
   baseErc4337: string;
   arbitrumErc4337: string;
@@ -67,6 +74,7 @@ export interface UiWalletEntry {
   label: string;
   chain: string;
   address: string | null;
+  category?: string;
 }
 
 export interface UiWalletPayload {

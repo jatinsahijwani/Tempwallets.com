@@ -9,7 +9,14 @@ export type ChainType =
   | 'avalanche'
   | 'tron'
   | 'bitcoin'
-  | 'solana';
+  | 'solana'
+  | 'moonbeamTestnet'
+  | 'astarShibuya'
+  | 'paseoPassetHub'
+  | 'hydration'
+  | 'unique'
+  | 'bifrost'
+  | 'bifrostTestnet';
 
 /**
  * EVM-compatible chains that support ERC-4337
@@ -69,4 +76,11 @@ export const NATIVE_TOKENS: Record<
   tron: { symbol: 'TRX', decimals: 6 },
   bitcoin: { symbol: 'BTC', decimals: 8 },
   solana: { symbol: 'SOL', decimals: 9 },
+  moonbeamTestnet: { symbol: 'DEV', decimals: 18 },
+  astarShibuya: { symbol: 'SBY', decimals: 18 },
+  paseoPassetHub: { symbol: 'PAS', decimals: 18 },
+  hydration: { symbol: 'WETH', decimals: 18 },
+  unique: { symbol: 'UNQ', decimals: 18 },
+  bifrost: { symbol: 'BFC', decimals: 18 },
+  bifrostTestnet: { symbol: 'BFC', decimals: 18 },
 };

@@ -12,6 +12,7 @@ import { SeedManager } from './managers/seed.manager.js';
 import { AddressManager } from './managers/address.manager.js';
 import { AccountFactory } from './factories/account.factory.js';
 import { PimlicoAccountFactory } from './factories/pimlico-account.factory.js';
+import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
 import { IAccount } from './types/account.types.js';
 import { AllChainTypes, Erc4337Chain } from './types/chain.types.js';
 import {
@@ -62,8 +63,32 @@ export class WalletService {
     'avalancheErc4337',
   ];
   private readonly EOA_CHAIN_KEYS: Array<
-    'ethereum' | 'base' | 'arbitrum' | 'polygon' | 'avalanche'
-  > = ['ethereum', 'base', 'arbitrum', 'polygon', 'avalanche'];
+    | 'ethereum'
+    | 'base'
+    | 'arbitrum'
+    | 'polygon'
+    | 'avalanche'
+    | 'moonbeamTestnet'
+    | 'astarShibuya'
+    | 'paseoPassetHub'
+    | 'hydration'
+    | 'unique'
+    | 'bifrost'
+    | 'bifrostTestnet'
+  > = [
+    'ethereum',
+    'base',
+    'arbitrum',
+    'polygon',
+    'avalanche',
+    'moonbeamTestnet',
+    'astarShibuya',
+    'paseoPassetHub',
+    'hydration',
+    'unique',
+    'bifrost',
+    'bifrostTestnet',
+  ];
   private readonly NON_EVM_CHAIN_KEYS: Array<'tron' | 'bitcoin' | 'solana'> = [
     'tron',
     'bitcoin',
@@ -111,6 +136,7 @@ export class WalletService {
     private addressManager: AddressManager,
     private accountFactory: AccountFactory,
     private pimlicoAccountFactory: PimlicoAccountFactory,
+    private polkadotEvmRpcService: PolkadotEvmRpcService,
   ) {}
 
   /**
@@ -252,6 +278,26 @@ export class WalletService {
   ): UiWalletEntry[] {
     const entries: UiWalletEntry[] = [];
 
+    // Polkadot EVM chains
+    const polkadotEvmChains: WalletAddressKey[] = [
+      'moonbeamTestnet',
+      'astarShibuya',
+      'paseoPassetHub',
+    ];
+    polkadotEvmChains.forEach((chain) => {
+      const entry = metadata[chain];
+      if (entry?.visible && entry.address) {
+        entries.push({
+          key: chain,
+          label: entry.label,
+          chain,
+          address: entry.address,
+          category: 'polkadot-evm',
+        });
+      }
+    });
+
+    // Non-EVM chains
     this.NON_EVM_CHAIN_KEYS.forEach((chain) => {
       const entry = metadata[chain];
       if (entry?.visible && entry.address) {
@@ -286,7 +332,32 @@ export class WalletService {
       };
     };
 
-    this.EOA_CHAIN_KEYS.forEach((chain) => assign(chain, 'eoa', false));
+    // Standard EOA chains (not visible by default)
+    const standardEoaChains = this.EOA_CHAIN_KEYS.filter(
+      (chain) =>
+        ![
+          'moonbeamTestnet',
+          'astarShibuya',
+          'paseoPassetHub',
+          'hydration',
+          'unique',
+          'bifrost',
+          'bifrostTestnet',
+        ].includes(chain),
+    );
+    standardEoaChains.forEach((chain) => assign(chain, 'eoa', false));
+    
+    // Polkadot EVM chains (visible)
+    const polkadotEvmChains: WalletAddressKey[] = [
+      'moonbeamTestnet',
+      'astarShibuya',
+      'paseoPassetHub',
+      'hydration',
+      'unique',
+      'bifrost',
+      'bifrostTestnet',
+    ];
+    polkadotEvmChains.forEach((chain) => assign(chain, 'eoa', true));
     this.SMART_ACCOUNT_CHAIN_KEYS.forEach((chain) =>
       assign(chain, 'erc4337', true),
     );
@@ -308,6 +379,13 @@ export class WalletService {
       tron: 'Tron',
       bitcoin: 'Bitcoin',
       solana: 'Solana',
+      moonbeamTestnet: 'Moonbeam Testnet',
+      astarShibuya: 'Astar Shibuya',
+      paseoPassetHub: 'Paseo PassetHub',
+      hydration: 'Hydration',
+      unique: 'Unique',
+      bifrost: 'Bifrost Mainnet',
+      bifrostTestnet: 'Bifrost Testnet',
       ethereumErc4337: 'Ethereum Smart Account',
       baseErc4337: 'Base Smart Account',
       arbitrumErc4337: 'Arbitrum Smart Account',
@@ -374,14 +452,58 @@ export class WalletService {
       erc4337Address,
       addresses.solana,
     ].filter(Boolean) as string[];
-    if (targetAddresses.length === 0) return [];
+    
+    // Polkadot EVM chains use the same EOA address as ethereum
+    const polkadotEvmAddress = addresses.ethereum;
 
-    // Fetch positions for each address in parallel
-    const results = await Promise.all(
-      targetAddresses.map((addr) =>
-        this.zerionService.getPositionsAnyChain(addr),
-      ),
-    );
+    // Fetch positions for each address in parallel (Zerion)
+    const zerionResults = targetAddresses.length > 0
+      ? await Promise.all(
+          targetAddresses.map((addr) =>
+            this.zerionService.getPositionsAnyChain(addr),
+          ),
+        )
+      : [];
+
+    // Fetch Polkadot EVM chain assets using RPC
+    const polkadotEvmChains = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
+    const polkadotResults: Array<{
+      chain: string;
+      address: string | null;
+      symbol: string;
+      balance: string;
+      decimals: number;
+      balanceHuman?: string;
+    }> = [];
+
+    if (polkadotEvmAddress) {
+      // Use Promise.allSettled to ensure RPC errors don't block Zerion results
+      const polkadotAssetResults = await Promise.allSettled(
+        polkadotEvmChains.map(async (chain) => {
+          try {
+            const assets = await this.polkadotEvmRpcService.getAssets(
+              polkadotEvmAddress,
+              chain,
+            );
+            return assets;
+          } catch (error) {
+            this.logger.error(
+              `Error fetching assets for ${chain}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+            return []; // Return empty array on error
+          }
+        }),
+      );
+
+      // Flatten the results
+      for (const result of polkadotAssetResults) {
+        if (result.status === 'fulfilled') {
+          polkadotResults.push(...result.value);
+        }
+      }
+    }
+
+    const results = [...zerionResults];
 
     // Merge and dedupe across addresses using chain_id + token address/native
     // Preserve Zerion's native balance format (smallest units) and decimals
@@ -397,7 +519,8 @@ export class WalletService {
       }
     >();
 
-    for (const parsedTokens of results) {
+    // Process Zerion results
+    for (const parsedTokens of zerionResults) {
       if (!parsedTokens || !Array.isArray(parsedTokens)) continue;
       for (const token of parsedTokens) {
         try {
@@ -424,6 +547,30 @@ export class WalletService {
             `Error processing parsed token: ${e instanceof Error ? e.message : 'Unknown error'}`,
           );
         }
+      }
+    }
+
+    // Process Polkadot EVM RPC results
+    for (const asset of polkadotResults) {
+      try {
+        // Skip zero balances
+        if (asset.balance === '0' || BigInt(asset.balance) === 0n) continue;
+
+        const key = `${asset.chain}:${asset.address ? asset.address.toLowerCase() : 'native'}`;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            chain: asset.chain,
+            address: asset.address,
+            symbol: asset.symbol,
+            balance: asset.balance,
+            decimals: asset.decimals,
+            balanceHuman: asset.balanceHuman,
+          });
+        }
+      } catch (e) {
+        this.logger.debug(
+          `Error processing Polkadot EVM asset: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        );
       }
     }
 
@@ -472,13 +619,72 @@ export class WalletService {
       erc4337Address,
       addresses.solana,
     ].filter(Boolean) as string[];
-    if (targetAddresses.length === 0) return [];
+    
+    // Polkadot EVM chains use the same EOA address as ethereum
+    const polkadotEvmAddress = addresses.ethereum;
 
-    const perAddr = await Promise.all(
-      targetAddresses.map((addr) =>
-        this.zerionService.getTransactionsAnyChain(addr, limit),
-      ),
-    );
+    // Fetch transactions from Zerion
+    const zerionPerAddr = targetAddresses.length > 0
+      ? await Promise.all(
+          targetAddresses.map((addr) =>
+            this.zerionService.getTransactionsAnyChain(addr, limit),
+          ),
+        )
+      : [];
+
+    // Fetch Polkadot EVM chain transactions using RPC
+    const polkadotEvmChains = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
+    const polkadotTransactions: Array<{
+      txHash: string;
+      from: string;
+      to: string | null;
+      value: string;
+      timestamp: number | null;
+      blockNumber: number | null;
+      status: 'success' | 'failed' | 'pending';
+      chain: string;
+      tokenSymbol?: string;
+      tokenAddress?: string;
+    }> = [];
+
+    if (polkadotEvmAddress) {
+      // Use Promise.allSettled to ensure RPC errors don't block Zerion results
+      const polkadotResults = await Promise.allSettled(
+        polkadotEvmChains.map(async (chain) => {
+          try {
+            const txs = await this.polkadotEvmRpcService.getTransactions(
+              polkadotEvmAddress,
+              chain,
+              limit,
+            );
+            return txs.map((tx) => ({
+              txHash: tx.txHash,
+              from: tx.from,
+              to: tx.to,
+              value: tx.value,
+              timestamp: tx.timestamp,
+              blockNumber: tx.blockNumber,
+              status: tx.status,
+              chain: tx.chain,
+            }));
+          } catch (error) {
+            this.logger.error(
+              `Error fetching transactions for ${chain}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            );
+            return []; // Return empty array on error
+          }
+        }),
+      );
+
+      // Flatten the results
+      for (const result of polkadotResults) {
+        if (result.status === 'fulfilled') {
+          polkadotTransactions.push(...result.value);
+        }
+      }
+    }
+
+    const perAddr = [...zerionPerAddr];
 
     const byKey = new Map<
       string,
@@ -558,6 +764,29 @@ export class WalletService {
             `Error processing any-chain tx: ${e instanceof Error ? e.message : 'Unknown error'}`,
           );
         }
+      }
+    }
+
+    // Process Polkadot EVM RPC transactions
+    for (const tx of polkadotTransactions) {
+      try {
+        const key = `${tx.chain}:${tx.txHash.toLowerCase()}`;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            txHash: tx.txHash,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            timestamp: tx.timestamp,
+            blockNumber: tx.blockNumber,
+            status: tx.status,
+            chain: tx.chain,
+          });
+        }
+      } catch (e) {
+        this.logger.debug(
+          `Error processing Polkadot EVM transaction: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        );
       }
     }
 
@@ -816,6 +1045,20 @@ export class WalletService {
       'eip155:43114',
       '43114',
       'avalanche-c',
+    ],
+    moonbeamTestnet: [
+      'moonbeamTestnet',
+      'moonbase',
+      'eip155:420420422',
+      '420420422',
+    ],
+    astarShibuya: ['astarShibuya', 'shibuya', 'eip155:81', '81'],
+    paseoPassetHub: [
+      'paseoPassetHub',
+      'paseo',
+      'passethub',
+      'eip155:420420422',
+      '420420422',
     ],
   };
 
@@ -1378,6 +1621,9 @@ export class WalletService {
         arbitrum: 'arbitrum',
         polygon: 'polygon',
         avalanche: 'avalanche',
+        moonbeamTestnet: 'moonbeamTestnet',
+        astarShibuya: 'astarShibuya',
+        paseoPassetHub: 'paseoPassetHub',
         tron: 'tron',
         bitcoin: 'bitcoin',
         solana: 'solana',
@@ -1913,6 +2159,9 @@ export class WalletService {
       42161: 'arbitrumErc4337', // Arbitrum
       137: 'polygonErc4337', // Polygon
       43114: 'avalancheErc4337', // Avalanche C-Chain
+      420420422: 'moonbeamTestnet', // Moonbeam Testnet (EOA only)
+      81: 'astarShibuya', // Astar Shibuya (EOA only)
+      // Note: Paseo PassetHub also uses 420420422, but we'll use moonbeamTestnet as primary
       // Fallback to EOA chains if ERC-4337 not available
       // 1: 'ethereum',
       // 8453: 'base',
@@ -1924,7 +2173,7 @@ export class WalletService {
     const internalChain = chainIdMap[numericChainId];
     if (!internalChain) {
       throw new BadRequestException(
-        `Unsupported chain ID: ${numericChainId}. Supported chains: Ethereum (1), Base (8453), Arbitrum (42161), Polygon (137), Avalanche (43114)`,
+        `Unsupported chain ID: ${numericChainId}. Supported chains: Ethereum (1), Base (8453), Arbitrum (42161), Polygon (137), Avalanche (43114), Moonbeam Testnet (420420422), Astar Shibuya (81)`,
       );
     }
 

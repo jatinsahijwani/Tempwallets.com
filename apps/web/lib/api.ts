@@ -16,6 +16,7 @@ export interface UiWalletEntry {
   label: string;
   chain: string;
   address: string | null;
+  category?: string;
 }
 
 export interface UiWalletPayload {
