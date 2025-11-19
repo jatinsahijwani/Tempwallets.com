@@ -49,8 +49,8 @@ export class SS58Util {
       const publicKey = decodeAddress(address);
       
       // Try common prefixes to detect which one matches
-      // Common prefixes: 0 (Polkadot), 2 (Kusama), 42 (Substrate generic/testnet), 6 (Bifrost), 7 (Unique), 63 (Hydration)
-      const commonPrefixes = [0, 2, 42, 6, 7, 63];
+      // Common prefixes: 0 (Polkadot), 2 (Kusama), 42 (Substrate generic/testnet), 6 (Bifrost), 7 (Unique), 47 (AssetHub), 63 (Hydration)
+      const commonPrefixes = [0, 2, 42, 6, 7, 47, 63];
       let detectedPrefix: number | null = null;
       
       for (const prefix of commonPrefixes) {
@@ -163,8 +163,8 @@ export class SS58Util {
       decodeAddress(address);
       
       // Try common prefixes to detect which one matches
-      // Common prefixes: 0 (Polkadot), 2 (Kusama), 42 (Substrate generic/testnet), 6 (Bifrost), 7 (Unique), 63 (Hydration)
-      const commonPrefixes = [0, 2, 42, 6, 7, 63];
+      // Common prefixes: 0 (Polkadot), 2 (Kusama), 42 (Substrate generic/testnet), 6 (Bifrost), 7 (Unique), 47 (AssetHub), 63 (Hydration)
+      const commonPrefixes = [0, 2, 42, 6, 7, 47, 63];
       
       for (const prefix of commonPrefixes) {
         const result = checkAddress(address, prefix);

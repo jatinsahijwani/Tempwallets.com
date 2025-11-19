@@ -50,6 +50,7 @@ export function useWallet(): UseWalletReturn {
       console.warn('⚠️ No ERC-4337 smart account available to display');
     }
 
+    // Process all auxiliary entries (including Substrate chains)
     payload.auxiliary?.forEach((entry) => {
       if (!entry.address) return;
       walletData.push({
@@ -60,6 +61,36 @@ export function useWallet(): UseWalletReturn {
       });
     });
 
+    // Debug: Log Substrate wallets
+    const substrateWallets = walletData.filter(w => w.category === 'substrate');
+    const substrateEntries = payload.auxiliary?.filter(e => e.category === 'substrate') || [];
+    
+    console.log('🔍 Processing wallets:', {
+      totalWallets: walletData.length,
+      smartAccount: payload.smartAccount?.address ? 1 : 0,
+      auxiliaryTotal: payload.auxiliary?.length || 0,
+      substrateInPayload: substrateEntries.length,
+      substrateWithAddress: substrateEntries.filter(e => e.address).length,
+      substrateWalletsProcessed: substrateWallets.length,
+    });
+    
+    if (substrateWallets.length > 0) {
+      console.log(`✅ Found ${substrateWallets.length} Substrate wallet(s):`, substrateWallets.map(w => ({ name: w.name, chain: w.chain })));
+    } else {
+      console.warn('⚠️ No Substrate wallets processed!');
+      if (substrateEntries.length > 0) {
+        console.warn('Substrate entries in payload (but not processed):', substrateEntries.map(e => ({
+          key: e.key,
+          label: e.label,
+          hasAddress: !!e.address,
+          address: e.address ? `${e.address.slice(0, 10)}...` : 'null',
+        })));
+      } else {
+        console.warn('No Substrate entries found in payload at all');
+      }
+    }
+
+    console.log(`📦 Total wallets processed: ${walletData.length} (Smart Account: ${payload.smartAccount?.address ? 1 : 0}, Auxiliary: ${payload.auxiliary?.length || 0})`);
     setWallets(walletData);
   }, []);
 
@@ -77,21 +108,44 @@ export function useWallet(): UseWalletReturn {
     const hasLoadedBefore = hasLoadedOnceRef.current[userId] || false;
   const hasWalletsInCache = hasWalletEntries(cachedWallets);
     
+    // Check if cache has Substrate addresses
+    const hasSubstrateInCache = cachedWallets?.auxiliary?.some(
+      (entry) => entry.category === 'substrate' && entry.address
+    ) || false;
+    
+    console.log('🔍 Cache check:', {
+      hasWalletsInCache,
+      hasSubstrateInCache,
+      hasLoadedBefore,
+      forceRefresh,
+      cachedAuxiliaryCount: cachedWallets?.auxiliary?.length || 0,
+      cachedSubstrateCount: cachedWallets?.auxiliary?.filter(e => e.category === 'substrate').length || 0,
+    });
+    
     // If we have cached data and not forcing refresh, use cache and skip API
-    if (hasWalletsInCache && !forceRefresh && hasLoadedBefore) {
+    // BUT: If cache doesn't have Substrate addresses, force refresh to get them
+    if (hasWalletsInCache && !forceRefresh && hasLoadedBefore && hasSubstrateInCache) {
       console.log('⚡ Using cached wallets (no API call)');
       processWallets(cachedWallets);
       return; // Skip API call - addresses don't change unless user changes wallet
     }
+    
+    // If cache is missing Substrate addresses, we need to force a refresh
+    const needsSubstrateRefresh = hasWalletsInCache && !hasSubstrateInCache;
+    if (needsSubstrateRefresh) {
+      console.log('🔄 Cache missing Substrate addresses, forcing refresh...');
+      // Force refresh by resetting hasLoadedBefore for this case
+      hasLoadedOnceRef.current[userId] = false;
+    }
 
-    // STEP 2: Load from cache immediately for display
+    // STEP 2: Load from cache immediately for display (even if we'll refresh)
     if (hasWalletsInCache && cachedWallets) {
       console.log('⚡ Loading wallets from cache (instant)');
       processWallets(cachedWallets);
     }
 
-    // STEP 3: Only call API if first time or forceRefresh
-    if (!forceRefresh && hasLoadedBefore) {
+    // STEP 3: Only call API if first time, forceRefresh, or missing Substrate
+    if (!forceRefresh && !needsSubstrateRefresh && hasLoadedBefore) {
       console.log('⏭️ Skipping API call - using cached data');
       return;
     }
@@ -114,6 +168,11 @@ export function useWallet(): UseWalletReturn {
           url,
           (data) => {
             if (!data) return;
+            console.log('📡 SSE data received:', {
+              smartAccount: !!data.smartAccount?.address,
+              auxiliaryCount: data.auxiliary?.length || 0,
+              substrateCount: data.auxiliary?.filter(e => e.category === 'substrate').length || 0,
+            });
             processWallets(data);
             walletStorage.setAddresses(userId, data);
           },
@@ -158,10 +217,21 @@ export function useWallet(): UseWalletReturn {
     // Helper function for batch loading (fallback)
     async function loadWalletsBatch(userId: string, cachedPayload: UiWalletPayload | null) {
       try {
+        console.log('📡 Fetching addresses from API (batch)...');
         // Try to get addresses from API
         let addresses: UiWalletPayload;
         try {
           addresses = await walletApi.getAddresses(userId);
+          console.log('✅ API response received:', {
+            smartAccount: !!addresses.smartAccount?.address,
+            auxiliaryCount: addresses.auxiliary?.length || 0,
+            substrateCount: addresses.auxiliary?.filter(e => e.category === 'substrate').length || 0,
+            substrateEntries: addresses.auxiliary?.filter(e => e.category === 'substrate').map(e => ({
+              key: e.key,
+              label: e.label,
+              hasAddress: !!e.address,
+            })),
+          });
         } catch (err) {
           // If 404, wallet doesn't exist - we'll create it
           if (err instanceof ApiError && err.status === 404) {
@@ -217,7 +287,13 @@ export function useWallet(): UseWalletReturn {
         } else {
           console.log('✅ Existing wallet loaded from backend');
           
-          // Cache the addresses
+          // Check if we got Substrate addresses
+          const substrateCount = addresses.auxiliary?.filter(
+            (e) => e.category === 'substrate' && e.address
+          ).length || 0;
+          console.log(`📊 Loaded ${substrateCount} Substrate address(es) from backend`);
+          
+          // Cache the addresses (including Substrate)
           walletStorage.setAddresses(userId, addresses);
           // Update wallets (they may be different from cache)
           processWallets(addresses);

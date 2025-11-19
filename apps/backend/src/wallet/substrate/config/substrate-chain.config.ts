@@ -30,7 +30,7 @@ export interface ChainConfig {
   testnet: ChainNetworkConfig;
 }
 
-export type SubstrateChainKey = 'polkadot' | 'hydration' | 'bifrost' | 'unique' | 'paseo';
+export type SubstrateChainKey = 'polkadot' | 'hydration' | 'bifrost' | 'unique' | 'paseo' | 'paseoAssethub';
 
 /**
  * Substrate Chain Configurations
@@ -95,7 +95,7 @@ export const SUBSTRATE_CHAINS: Record<SubstrateChainKey, ChainConfig> = {
     testnet: {
       // Bifrost testnet (if available - using placeholder for now)
       genesisHash: '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Update with actual testnet genesis hash
-      rpc: 'wss://testnet-rpc.bifrost.finance', // TODO: Update with actual testnet RPC
+      rpc: 'wss://public-02.testnet.bifrostnetwork.com/wss', // TODO: Update with actual testnet RPC
       ss58Prefix: 6,
       token: { symbol: 'BNC', decimals: 12 },
       name: 'Bifrost Testnet',
@@ -118,7 +118,7 @@ export const SUBSTRATE_CHAINS: Record<SubstrateChainKey, ChainConfig> = {
     testnet: {
       // Unique testnet (if available - using placeholder for now)
       genesisHash: '0x0000000000000000000000000000000000000000000000000000000000000000', // TODO: Update with actual testnet genesis hash
-      rpc: 'wss://testnet-rpc.unique.network', // TODO: Update with actual testnet RPC
+      rpc: 'wss://ws-opal.unique.network', // TODO: Update with actual testnet RPC
       ss58Prefix: 7,
       token: { symbol: 'UNQ', decimals: 18 },
       name: 'Unique Testnet',
@@ -149,6 +149,33 @@ export const SUBSTRATE_CHAINS: Record<SubstrateChainKey, ChainConfig> = {
       isTestnet: true,
     },
   },
+  paseoAssethub: {
+    // Paseo AssetHub - Asset-bearing testnet parachain for transaction testing
+    // Note: Regular Paseo is NOT asset-bearing, use AssetHub for transactions
+    mainnet: {
+      // AssetHub mainnet would go here if needed
+      genesisHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+      rpc: 'wss://asset-hub-polkadot.dotters.network',
+      ss58Prefix: 0,
+      token: { symbol: 'DOT', decimals: 10 },
+      name: 'Polkadot AssetHub',
+      paraId: 1000,
+      walletConnectId: 'polkadot:0000000000000000000000000000000000000000000000000000000000000000',
+      isTestnet: false,
+    },
+    testnet: {
+      // Paseo AssetHub (Testnet) - Asset-bearing chain for transaction testing
+      // Note: SS58 prefix is 0 (same as Polkadot) - verified at runtime via api.registry.chainSS58
+      genesisHash: '0xb2bd50b6b5e8cd4996fa87e17dcb9fbc3ce3e4e47d0c114b92111decc032d0e9',
+      rpc: 'wss://asset-hub-paseo.dotters.network',
+      ss58Prefix: 0, // Changed from 47 to 0 - prefix 47 is not supported by Keyring
+      token: { symbol: 'PAS', decimals: 10 },
+      name: 'Paseo AssetHub',
+      paraId: 1000,
+      walletConnectId: 'polkadot:b2bd50b6b5e8cd4996fa87e17dcb9fbc3ce3e4e47d0c114b92111decc032d0e9',
+      isTestnet: true,
+    },
+  },
 };
 
 /**
@@ -173,7 +200,12 @@ export function getChainConfig(
 ): ChainNetworkConfig {
   const chainConfig = SUBSTRATE_CHAINS[chain];
   
-  // Determine which network to use
+  // Paseo and Paseo AssetHub are testnet-only chains, always use testnet config
+  if (chain === 'paseo' || chain === 'paseoAssethub') {
+    return chainConfig.testnet;
+  }
+  
+  // Determine which network to use for other chains
   const shouldUseTestnet =
     useTestnet !== undefined
       ? useTestnet
@@ -188,7 +220,7 @@ export function getChainConfig(
  * @returns Array of chain keys that are enabled
  */
 export function getEnabledChains(): SubstrateChainKey[] {
-  const chains: SubstrateChainKey[] = ['polkadot', 'hydration', 'bifrost', 'unique', 'paseo'];
+  const chains: SubstrateChainKey[] = ['polkadot', 'hydration', 'bifrost', 'unique', 'paseo', 'paseoAssethub'];
   
   // Filter based on feature flags
   if (!SUBSTRATE_FEATURES.MAINNET_ENABLED && !SUBSTRATE_FEATURES.TESTNET_ENABLED) {
@@ -219,7 +251,7 @@ export function findChainFromAddress(
   address: string,
 ): { chain: SubstrateChainKey; config: ChainNetworkConfig; isTestnet: boolean } | null {
   // Try each chain configuration to find matching prefix
-  const chains: SubstrateChainKey[] = ['polkadot', 'hydration', 'bifrost', 'unique', 'paseo'];
+  const chains: SubstrateChainKey[] = ['polkadot', 'hydration', 'bifrost', 'unique', 'paseo', 'paseoAssethub'];
   
   // First try testnet configs, then mainnet
   for (const chain of chains) {

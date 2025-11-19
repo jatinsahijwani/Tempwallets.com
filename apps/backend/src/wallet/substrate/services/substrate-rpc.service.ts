@@ -74,19 +74,19 @@ export class SubstrateRpcService implements OnModuleDestroy {
     try {
       const provider = new WsProvider(rpcUrl);
       
-      // Create API with timeout
+      // Create API with shorter timeout (15s) to fail faster
       const api = await Promise.race([
         ApiPromise.create({ provider }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Connection timeout after 30s')), 30000),
+          setTimeout(() => reject(new Error('Connection timeout after 15s')), 15000),
         ),
       ]);
       
-      // Wait for API to be ready with timeout
+      // Wait for API to be ready with shorter timeout (15s)
       await Promise.race([
         api.isReady,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('API ready timeout after 30s')), 30000),
+          setTimeout(() => reject(new Error('API ready timeout after 15s')), 15000),
         ),
       ]);
       
@@ -122,7 +122,14 @@ export class SubstrateRpcService implements OnModuleDestroy {
       if (!api.query.system?.account) {
         throw new Error('System account query not available');
       }
-      const accountInfo = await api.query.system.account(address);
+      
+      // Add timeout for the query itself (10 seconds) to prevent hanging
+      const queryPromise = api.query.system.account(address);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Query timeout for ${chain} after 10s`)), 10000)
+      );
+      
+      const accountInfo = await Promise.race([queryPromise, timeoutPromise]);
       // @ts-ignore - accountInfo.data.free is a Balance type
       const balance = accountInfo.data.free.toString();
       return balance;

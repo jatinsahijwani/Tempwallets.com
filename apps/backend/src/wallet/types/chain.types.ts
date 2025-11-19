@@ -1,4 +1,15 @@
 /**
+ * Substrate/Polkadot chain types
+ */
+export type SubstrateChain =
+  | 'polkadot'
+  | 'hydration'
+  | 'bifrost'
+  | 'unique'
+  | 'paseo'
+  | 'paseoAssethub';
+
+/**
  * Supported blockchain networks
  */
 export type ChainType =
@@ -29,9 +40,9 @@ export type Erc4337Chain =
   | 'avalanche';
 
 /**
- * All chain types including ERC-4337 variants
+ * All chain types including ERC-4337 variants and Substrate chains
  */
-export type AllChainTypes = ChainType | `${Erc4337Chain}Erc4337`;
+export type AllChainTypes = ChainType | `${Erc4337Chain}Erc4337` | SubstrateChain;
 
 /**
  * Chain configuration for EVM chains

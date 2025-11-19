@@ -25,6 +25,7 @@ export interface SubstrateAddresses {
   bifrost: string | null;
   unique: string | null;
   paseo: string | null;
+  paseoAssethub: string | null;
 }
 
 interface CachedAddresses {
@@ -78,6 +79,7 @@ export class SubstrateAddressManager {
       bifrost: null,
       unique: null,
       paseo: null,
+      paseoAssethub: null,
     };
 
     // Derive addresses in parallel with retry logic

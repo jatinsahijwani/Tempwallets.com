@@ -29,11 +29,18 @@ export interface WalletAddresses {
   arbitrumErc4337: string;
   polygonErc4337: string;
   avalancheErc4337: string;
+  // Substrate/Polkadot chains (can be null if not derived)
+  polkadot: string | null;
+  hydrationSubstrate: string | null; // Note: Different from EVM hydration
+  bifrostSubstrate: string | null; // Note: Different from EVM bifrost
+  uniqueSubstrate: string | null; // Note: Different from EVM unique
+  paseo: string | null;
+  paseoAssethub: string | null;
 }
 
 export type WalletAddressKey = keyof WalletAddresses;
 
-export type WalletAddressKind = 'eoa' | 'erc4337' | 'nonEvm';
+export type WalletAddressKind = 'eoa' | 'erc4337' | 'nonEvm' | 'substrate';
 
 export interface WalletAddressMetadata {
   chain: WalletAddressKey;
@@ -89,7 +96,7 @@ export interface WalletAddressContext {
 }
 
 export interface WalletConnectNamespacePayload {
-  namespace: 'eip155';
+  namespace: 'eip155' | 'polkadot' | 'solana';
   chains: string[];
   accounts: string[];
   addressesByChain: Record<string, string>;

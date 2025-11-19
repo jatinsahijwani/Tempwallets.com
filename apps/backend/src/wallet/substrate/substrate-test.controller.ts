@@ -277,6 +277,74 @@ export class SubstrateTestController {
   }
 
   /**
+   * Ensure address is created for a user on a specific chain
+   * GET /wallet/substrate/test/ensure-address?userId=test-user&chain=paseoAssethub&useTestnet=true
+   * This will create the wallet if it doesn't exist and derive the address for the specified chain
+   */
+  @Get('ensure-address')
+  async ensureAddress(
+    @Query('userId') userId?: string,
+    @Query('chain') chain?: string,
+    @Query('useTestnet') useTestnet?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId parameter is required');
+    }
+    if (!chain) {
+      throw new BadRequestException('chain parameter is required');
+    }
+
+    const chainKey = chain as SubstrateChainKey;
+    const useTestnetBool = useTestnet === 'true';
+
+    try {
+      // Clear cache to force fresh derivation
+      this.addressManager.clearCache(userId);
+
+      // Get address for the specific chain (this will create wallet if needed)
+      const address = await this.addressManager.getAddressForChain(
+        userId,
+        chainKey,
+        useTestnetBool,
+      );
+
+      if (!address) {
+        return {
+          success: false,
+          userId,
+          chain: chainKey,
+          useTestnet: useTestnetBool,
+          error: 'Failed to derive address for the specified chain',
+          note: 'Check logs for derivation errors. Ensure the chain is enabled and configured correctly.',
+        };
+      }
+
+      const chainConfig = getChainConfig(chainKey, useTestnetBool);
+
+      return {
+        success: true,
+        userId,
+        chain: chainKey,
+        chainName: chainConfig.name,
+        useTestnet: useTestnetBool,
+        address,
+        ss58Prefix: chainConfig.ss58Prefix,
+        token: chainConfig.token.symbol,
+        note: `Address successfully created/retrieved for ${chainConfig.name}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        userId,
+        chain: chainKey,
+        useTestnet: useTestnetBool,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        note: 'Failed to create/retrieve address. Check logs for details.',
+      };
+    }
+  }
+
+  /**
    * Test address derivation
    * GET /wallet/substrate/test/address?userId=test-user&chain=polkadot
    */
@@ -708,9 +776,9 @@ export class SubstrateTestController {
       };
     }
 
-    // Test 6: RPC Connection (testnet)
+    // Test 6: RPC Connection (testnet) - Use AssetHub for asset-bearing chain
     try {
-      const api = await this.rpcService.getConnection('paseo', true);
+      const api = await this.rpcService.getConnection('paseoAssethub', true);
       results.rpc = {
         success: true,
         isConnected: api.isConnected,
@@ -899,7 +967,9 @@ export class SubstrateTestController {
 
   /**
    * Test transaction construction
-   * GET /wallet/substrate/test/construct?from=xxx&to=yyy&amount=1000000&chain=polkadot&useTestnet=true
+   * GET /wallet/substrate/test/construct?from=xxx&to=yyy&amount=1000000&chain=paseoAssethub&useTestnet=true&transferMethod=transferAllowDeath
+   * Note: Use paseoAssethub (not paseo) for transaction testing - Paseo is NOT asset-bearing
+   * transferMethod: 'transferAllowDeath' (default) or 'transferKeepAlive'
    */
   @Get('construct')
   async testConstruct(
@@ -908,6 +978,7 @@ export class SubstrateTestController {
     @Query('amount') amount?: string,
     @Query('chain') chain?: string,
     @Query('useTestnet') useTestnet?: string,
+    @Query('transferMethod') transferMethod?: string,
   ) {
     if (!from || !to || !amount || !chain) {
       throw new BadRequestException('from, to, amount, and chain parameters are required');
@@ -915,6 +986,7 @@ export class SubstrateTestController {
 
     const chainKey = chain as SubstrateChainKey;
     const useTestnetBool = useTestnet === 'true';
+    const method = (transferMethod === 'transferKeepAlive' ? 'transferKeepAlive' : 'transferAllowDeath') as 'transferAllowDeath' | 'transferKeepAlive';
 
     try {
       const transaction = await this.transactionService.constructTransfer({
@@ -923,6 +995,7 @@ export class SubstrateTestController {
         amount,
         chain: chainKey,
         useTestnet: useTestnetBool,
+        transferMethod: method,
       });
 
       return {
@@ -932,10 +1005,11 @@ export class SubstrateTestController {
         amount,
         chain: chainKey,
         useTestnet: useTestnetBool,
+        transferMethod: method,
         method: transaction.method.section + '.' + transaction.method.method,
         args: transaction.method.args.map((arg: any) => arg.toHuman()),
         txHash: transaction.hash.toHex(),
-        note: 'Transaction constructed successfully',
+        note: `Transaction constructed successfully using ${method}`,
       };
     } catch (error) {
       return {
@@ -951,7 +1025,9 @@ export class SubstrateTestController {
 
   /**
    * Test fee estimation
-   * GET /wallet/substrate/test/estimate-fee?from=xxx&to=yyy&amount=1000000&chain=polkadot&useTestnet=true
+   * GET /wallet/substrate/test/estimate-fee?from=xxx&to=yyy&amount=1000000&chain=paseoAssethub&useTestnet=true&transferMethod=transferAllowDeath
+   * Note: Use paseoAssethub (not paseo) for transaction testing - Paseo is NOT asset-bearing
+   * transferMethod: 'transferAllowDeath' (default) or 'transferKeepAlive'
    */
   @Get('estimate-fee')
   async testEstimateFee(
@@ -960,6 +1036,7 @@ export class SubstrateTestController {
     @Query('amount') amount?: string,
     @Query('chain') chain?: string,
     @Query('useTestnet') useTestnet?: string,
+    @Query('transferMethod') transferMethod?: string,
   ) {
     if (!from || !to || !amount || !chain) {
       throw new BadRequestException('from, to, amount, and chain parameters are required');
@@ -967,6 +1044,7 @@ export class SubstrateTestController {
 
     const chainKey = chain as SubstrateChainKey;
     const useTestnetBool = useTestnet === 'true';
+    const method = (transferMethod === 'transferKeepAlive' ? 'transferKeepAlive' : 'transferAllowDeath') as 'transferAllowDeath' | 'transferKeepAlive';
 
     try {
       // Construct transaction
@@ -976,6 +1054,7 @@ export class SubstrateTestController {
         amount,
         chain: chainKey,
         useTestnet: useTestnetBool,
+        transferMethod: method,
       });
 
       // Estimate fee
@@ -1001,7 +1080,8 @@ export class SubstrateTestController {
         token: chainConfig.token.symbol,
         weight: feeEstimate.weight,
         class: feeEstimate.class,
-        note: 'Fee estimated successfully',
+        transferMethod: method,
+        note: `Fee estimated successfully using ${method}`,
       };
     } catch (error) {
       return {
@@ -1017,7 +1097,9 @@ export class SubstrateTestController {
 
   /**
    * Test transaction signing
-   * GET /wallet/substrate/test/sign?userId=xxx&to=yyy&amount=1000000&chain=polkadot&useTestnet=true
+   * GET /wallet/substrate/test/sign?userId=xxx&to=yyy&amount=1000000&chain=paseoAssethub&useTestnet=true&transferMethod=transferAllowDeath
+   * Note: Use paseoAssethub (not paseo) for transaction testing - Paseo is NOT asset-bearing
+   * transferMethod: 'transferAllowDeath' (default) or 'transferKeepAlive'
    */
   @Get('sign')
   async testSign(
@@ -1026,6 +1108,7 @@ export class SubstrateTestController {
     @Query('amount') amount?: string,
     @Query('chain') chain?: string,
     @Query('useTestnet') useTestnet?: string,
+    @Query('transferMethod') transferMethod?: string,
   ) {
     if (!userId || !to || !amount || !chain) {
       throw new BadRequestException('userId, to, amount, and chain parameters are required');
@@ -1033,6 +1116,7 @@ export class SubstrateTestController {
 
     const chainKey = chain as SubstrateChainKey;
     const useTestnetBool = useTestnet === 'true';
+    const method = (transferMethod === 'transferKeepAlive' ? 'transferKeepAlive' : 'transferAllowDeath') as 'transferAllowDeath' | 'transferKeepAlive';
 
     try {
       // Get sender address
@@ -1048,6 +1132,7 @@ export class SubstrateTestController {
         amount,
         chain: chainKey,
         useTestnet: useTestnetBool,
+        transferMethod: method,
       });
 
       // Sign transaction
@@ -1067,10 +1152,11 @@ export class SubstrateTestController {
         amount,
         chain: chainKey,
         useTestnet: useTestnetBool,
+        transferMethod: method,
         txHash: signed.txHash,
         nonce: signed.nonce,
         signedTxLength: signed.signedTx.length,
-        note: 'Transaction signed successfully (not broadcast)',
+        note: `Transaction signed successfully using ${method} (not broadcast)`,
       };
     } catch (error) {
       return {
@@ -1086,8 +1172,9 @@ export class SubstrateTestController {
 
   /**
    * Test send transfer (construct, sign, and broadcast)
-   * POST /wallet/substrate/test/send
-   * Body: { userId, to, amount, chain, useTestnet }
+   * GET /wallet/substrate/test/send?userId=xxx&to=yyy&amount=1000000&chain=paseoAssethub&useTestnet=true&transferMethod=transferAllowDeath
+   * Note: Use paseoAssethub (not paseo) for transaction testing - Paseo is NOT asset-bearing
+   * transferMethod: 'transferAllowDeath' (default) or 'transferKeepAlive'
    */
   @Get('send')
   async testSend(
@@ -1096,6 +1183,7 @@ export class SubstrateTestController {
     @Query('amount') amount?: string,
     @Query('chain') chain?: string,
     @Query('useTestnet') useTestnet?: string,
+    @Query('transferMethod') transferMethod?: string,
   ) {
     if (!userId || !to || !amount || !chain) {
       throw new BadRequestException('userId, to, amount, and chain parameters are required');
@@ -1103,6 +1191,7 @@ export class SubstrateTestController {
 
     const chainKey = chain as SubstrateChainKey;
     const useTestnetBool = useTestnet === 'true';
+    const method = (transferMethod === 'transferKeepAlive' ? 'transferKeepAlive' : 'transferAllowDeath') as 'transferAllowDeath' | 'transferKeepAlive';
 
     try {
       // Get sender address
@@ -1120,6 +1209,7 @@ export class SubstrateTestController {
           amount,
           chain: chainKey,
           useTestnet: useTestnetBool,
+          transferMethod: method,
         },
         0, // accountIndex
       );
@@ -1196,6 +1286,99 @@ export class SubstrateTestController {
         success: false,
         address,
         chain: chainKey,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Check pallet availability on a chain
+   * GET /wallet/substrate/test/check-pallet?chain=paseoAssethub&useTestnet=true&pallet=balances
+   */
+  @Get('check-pallet')
+  async checkPallet(
+    @Query('chain') chain?: string,
+    @Query('useTestnet') useTestnet?: string,
+    @Query('pallet') pallet?: string,
+  ) {
+    if (!chain) {
+      throw new BadRequestException('chain parameter is required');
+    }
+
+    const chainKey = chain as SubstrateChainKey;
+    const useTestnetBool = useTestnet === 'true';
+    const palletName = pallet || 'balances';
+
+    try {
+      const api = await this.rpcService.getConnection(chainKey, useTestnetBool);
+      
+      // CRITICAL: Always await api.isReady before using .tx or .query
+      await api.isReady;
+
+      const chainConfig = getChainConfig(chainKey, useTestnetBool);
+
+      // Check if pallet exists in tx
+      const palletExists = !!(api.tx as any)[palletName];
+      const palletInfo = palletExists ? (api.tx as any)[palletName] : null;
+
+      // Get available methods if pallet exists
+      let availableMethods: string[] = [];
+      if (palletInfo && typeof palletInfo === 'object') {
+        availableMethods = Object.keys(palletInfo).filter(
+          (key) => typeof palletInfo[key] === 'function',
+        );
+      }
+
+      // Check specific methods for balances pallet
+      // Modern Substrate runtimes use transferAllowDeath or transferKeepAlive instead of transfer
+      let transferAvailable = false;
+      let transferAllowDeathAvailable = false;
+      let transferKeepAliveAvailable = false;
+      let transferAllAvailable = false;
+      
+      if (palletName === 'balances' && palletInfo) {
+        transferAvailable = !!palletInfo.transfer; // Deprecated in newer runtimes
+        transferAllowDeathAvailable = !!palletInfo.transferAllowDeath; // Recommended default
+        transferKeepAliveAvailable = !!palletInfo.transferKeepAlive; // Safer option
+        transferAllAvailable = !!palletInfo.transferAll; // Transfer all funds
+      }
+
+      // Check query availability
+      const queryExists = !!(api.query as any)[palletName];
+      const queryInfo = queryExists ? (api.query as any)[palletName] : null;
+
+      return {
+        success: true,
+        chain: chainKey,
+        chainName: chainConfig.name,
+        useTestnet: useTestnetBool,
+        rpc: chainConfig.rpc,
+        pallet: palletName,
+        palletExists,
+        // Transfer method availability (for balances pallet)
+        transferAvailable: palletName === 'balances' ? transferAvailable : null, // Deprecated
+        transferAllowDeathAvailable: palletName === 'balances' ? transferAllowDeathAvailable : null, // Recommended
+        transferKeepAliveAvailable: palletName === 'balances' ? transferKeepAliveAvailable : null, // Safer
+        transferAllAvailable: palletName === 'balances' ? transferAllAvailable : null,
+        availableMethods: availableMethods.length > 0 ? availableMethods : null,
+        queryAvailable: queryExists,
+        apiReady: api.isReady,
+        genesisHash: api.genesisHash.toHex(),
+        chainDecimals: api.registry.chainDecimals,
+        chainTokens: api.registry.chainTokens,
+        // Runtime SS58 prefix (what the chain actually uses)
+        runtimeSS58Prefix: api.registry.chainSS58,
+        configuredSS58Prefix: chainConfig.ss58Prefix,
+        ss58PrefixMatch: api.registry.chainSS58 === chainConfig.ss58Prefix,
+        note: palletExists
+          ? `Pallet ${palletName} is available on ${chainConfig.name}`
+          : `Pallet ${palletName} is NOT available on ${chainConfig.name}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        chain: chainKey,
+        pallet: palletName,
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }

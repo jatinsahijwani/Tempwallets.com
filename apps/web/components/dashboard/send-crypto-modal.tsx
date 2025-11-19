@@ -48,6 +48,13 @@ const CHAIN_NAMES: Record<string, string> = {
   moonbeamTestnet: "Moonbeam Testnet",
   astarShibuya: "Astar Shibuya",
   paseoPassetHub: "Paseo PassetHub",
+  // Substrate/Polkadot chains
+  polkadot: "Polkadot",
+  hydrationSubstrate: "Hydration (Substrate)",
+  bifrostSubstrate: "Bifrost (Substrate)",
+  uniqueSubstrate: "Unique (Substrate)",
+  paseo: "Paseo",
+  paseoAssethub: "Paseo AssetHub",
 };
 
 // Address validation per chain type
@@ -86,26 +93,107 @@ const validateAddress = (address: string, chain: string): string | null => {
     }
   }
 
+  // Substrate/Polkadot chains (SS58 format)
+  const SUBSTRATE_CHAINS = ["polkadot", "hydrationSubstrate", "bifrostSubstrate", "uniqueSubstrate", "paseo", "paseoAssethub"];
+  if (SUBSTRATE_CHAINS.includes(chain)) {
+    // SS58 addresses are typically 48 characters, but can vary
+    // Basic validation: should be alphanumeric and reasonable length
+    if (trimmed.length < 32 || trimmed.length > 50 || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(trimmed)) {
+      return "Invalid Substrate address format (SS58 encoded, typically 32-50 characters)";
+    }
+  }
+
   return null;
 };
 
+/**
+ * Format transaction hash for block explorer
+ * Substrate chains need hash without 0x prefix for Subscan
+ */
+const formatTxHashForExplorer = (hash: string, isSubstrate: boolean = false): string => {
+  if (!hash) return '';
+  // Remove 0x prefix for Substrate chains (Subscan expects it without prefix)
+  if (isSubstrate && hash.startsWith('0x')) {
+    return hash.slice(2);
+  }
+  return hash;
+};
+
 const getExplorerUrl = (txHash: string, chain: string): string => {
-  const urls: Record<string, string> = {
-    ethereum: `https://etherscan.io/tx/${txHash}`,
-    ethereumErc4337: `https://etherscan.io/tx/${txHash}`,
-    baseErc4337: `https://basescan.org/tx/${txHash}`,
-    base: `https://basescan.org/tx/${txHash}`,
-    arbitrumErc4337: `https://arbiscan.io/tx/${txHash}`,
-    arbitrum: `https://arbiscan.io/tx/${txHash}`,
-    polygonErc4337: `https://polygonscan.com/tx/${txHash}`,
-    polygon: `https://polygonscan.com/tx/${txHash}`,
-    avalancheErc4337: `https://snowtrace.io/tx/${txHash}`,
-    avalanche: `https://snowtrace.io/tx/${txHash}`,
+  if (!txHash) return '#';
+
+  // Determine if this is a testnet chain
+  const isTestnet = chain === 'paseo' || chain === 'paseoAssethub' || 
+                    chain === 'moonbeamTestnet' || chain === 'astarShibuya' ||
+                    chain === 'paseoPassetHub';
+
+  // EVM chains (testnet support)
+  const evmExplorers: Record<string, { mainnet: string; testnet?: string }> = {
+    ethereum: { mainnet: 'https://etherscan.io', testnet: 'https://sepolia.etherscan.io' },
+    base: { mainnet: 'https://basescan.org', testnet: 'https://sepolia.basescan.org' },
+    arbitrum: { mainnet: 'https://arbiscan.io', testnet: 'https://sepolia.arbiscan.io' },
+    polygon: { mainnet: 'https://polygonscan.com', testnet: 'https://mumbai.polygonscan.com' },
+    avalanche: { mainnet: 'https://snowtrace.io', testnet: 'https://testnet.snowtrace.io' },
+    moonbeamTestnet: { mainnet: 'https://moonscan.io', testnet: 'https://moonbase.moonscan.io' },
+    astarShibuya: { mainnet: 'https://astar.subscan.io', testnet: 'https://shibuya.subscan.io' },
+    paseoPassetHub: { mainnet: 'https://assethub-polkadot.subscan.io', testnet: 'https://assethub-paseo.subscan.io' },
+  };
+
+  // Check if it's an EVM chain
+  const evmChain = chain.replace('Erc4337', '');
+  if (evmExplorers[evmChain]) {
+    const explorer = isTestnet && evmExplorers[evmChain].testnet 
+      ? evmExplorers[evmChain].testnet 
+      : evmExplorers[evmChain].mainnet;
+    return `${explorer}/tx/${txHash}`;
+  }
+
+  // Non-EVM chains
+  const nonEvmExplorers: Record<string, string> = {
     tron: `https://tronscan.org/#/transaction/${txHash}`,
     bitcoin: `https://blockstream.info/tx/${txHash}`,
     solana: `https://solscan.io/tx/${txHash}`,
   };
-  return urls[chain] || `#`;
+
+  if (nonEvmExplorers[chain]) {
+    return nonEvmExplorers[chain];
+  }
+
+  // Substrate/Polkadot chains - use Subscan
+  const substrateExplorers: Record<string, { mainnet: string; testnet: string }> = {
+    polkadot: { 
+      mainnet: 'https://polkadot.subscan.io', 
+      testnet: 'https://paseo.subscan.io' 
+    },
+    hydrationSubstrate: { 
+      mainnet: 'https://hydradx.subscan.io', 
+      testnet: 'https://hydradx-testnet.subscan.io' 
+    },
+    bifrostSubstrate: { 
+      mainnet: 'https://bifrost.subscan.io', 
+      testnet: 'https://bifrost-testnet.subscan.io' 
+    },
+    uniqueSubstrate: { 
+      mainnet: 'https://unique.subscan.io', 
+      testnet: 'https://unique-testnet.subscan.io' 
+    },
+    paseo: { 
+      mainnet: 'https://paseo.subscan.io', 
+      testnet: 'https://paseo.subscan.io' 
+    },
+    paseoAssethub: { 
+      mainnet: 'https://assethub-polkadot.subscan.io', 
+      testnet: 'https://assethub-paseo.subscan.io' 
+    },
+  };
+
+  if (substrateExplorers[chain]) {
+    const explorer = isTestnet ? substrateExplorers[chain].testnet : substrateExplorers[chain].mainnet;
+    const formattedHash = formatTxHashForExplorer(txHash, true);
+    return `${explorer}/extrinsic/${formattedHash}`;
+  }
+
+  return '#';
 };
 
 // Map internal chain identifiers to Zerion canonical chain ids used by assets-any
@@ -159,27 +247,52 @@ export function SendCryptoModal({ open, onOpenChange, chain, userId, onSuccess }
     setLoadingTokens(true);
     setError(null);
     try {
-      // Load aggregated assets once and filter for the selected chain
-      const allAssets: AnyChainAsset[] = await walletApi.getAssetsAny(userId);
-      const zChain = mapToZerionChain(chain);
-      const filtered = allAssets.filter(a => a.chain === zChain);
-      // Transform to TokenBalance shape with actual decimals from Zerion
-      const tokenList: TokenBalance[] = filtered.map(a => ({
-        address: a.address,
-        symbol: a.symbol,
-        balance: a.balance, // smallest units (wei, satoshi, etc.)
-        decimals: a.decimals, // actual token decimals (6 for USDC, 18 for ETH, etc.)
-      }));
+      // Check if this is a Substrate chain
+      const SUBSTRATE_CHAINS = ["polkadot", "hydrationSubstrate", "bifrostSubstrate", "uniqueSubstrate", "paseo", "paseoAssethub"];
+      const isSubstrate = SUBSTRATE_CHAINS.includes(chain);
 
-      // Keep native first, then others; native has address === null
-      tokenList.sort((a, b) => (a.address === null ? -1 : b.address === null ? 1 : 0));
+      if (isSubstrate) {
+        // Load Substrate balances
+        const balances = await walletApi.getSubstrateBalances(userId, false);
+        const chainBalance = balances[chain];
+        
+        if (chainBalance && chainBalance.address) {
+          // Create a single token entry for native Substrate token
+          const tokenList: TokenBalance[] = [{
+            address: null, // Native token
+            symbol: chainBalance.token,
+            balance: chainBalance.balance,
+            decimals: chainBalance.decimals,
+          }];
+          setTokens(tokenList);
+          setSelectedToken(tokenList[0]);
+        } else {
+          setTokens([]);
+          setError("No address found for this Substrate chain");
+        }
+      } else {
+        // Load aggregated assets once and filter for the selected chain
+        const allAssets: AnyChainAsset[] = await walletApi.getAssetsAny(userId);
+        const zChain = mapToZerionChain(chain);
+        const filtered = allAssets.filter(a => a.chain === zChain);
+        // Transform to TokenBalance shape with actual decimals from Zerion
+        const tokenList: TokenBalance[] = filtered.map(a => ({
+          address: a.address,
+          symbol: a.symbol,
+          balance: a.balance, // smallest units (wei, satoshi, etc.)
+          decimals: a.decimals, // actual token decimals (6 for USDC, 18 for ETH, etc.)
+        }));
 
-      setTokens(tokenList);
-      if (tokenList.length > 0) {
-        // Select first token (native token) by default
-        const firstToken = tokenList[0];
-        if (firstToken) {
-          setSelectedToken(firstToken);
+        // Keep native first, then others; native has address === null
+        tokenList.sort((a, b) => (a.address === null ? -1 : b.address === null ? 1 : 0));
+
+        setTokens(tokenList);
+        if (tokenList.length > 0) {
+          // Select first token (native token) by default
+          const firstToken = tokenList[0];
+          if (firstToken) {
+            setSelectedToken(firstToken);
+          }
         }
       }
     } catch (err) {
@@ -237,16 +350,38 @@ export function SendCryptoModal({ open, onOpenChange, chain, userId, onSuccess }
     setError(null);
 
     try {
-  // Server now converts human amount to smallest units using authoritative decimals
+      // Check if this is a Substrate chain
+      const SUBSTRATE_CHAINS = ["polkadot", "hydrationSubstrate", "bifrostSubstrate", "uniqueSubstrate", "paseo", "paseoAssethub"];
+      const isSubstrate = SUBSTRATE_CHAINS.includes(chain);
 
-      const result = await walletApi.sendCrypto({
-        userId,
-        chain,
-        tokenAddress: selectedToken.address || undefined,
-        tokenDecimals: selectedToken.decimals,
-        amount: amount, // human-readable amount; server converts using ERC-20 decimals / Zerion
-        recipientAddress: recipientAddress.trim(),
-      });
+      let result: { txHash: string };
+
+      if (isSubstrate) {
+        // Convert human-readable amount to smallest units for Substrate
+        const amountInSmallestUnits = (parseFloat(amount) * Math.pow(10, selectedToken.decimals)).toString();
+        
+        // Use Substrate send endpoint
+        const substrateResult = await walletApi.sendSubstrateTransfer({
+          userId,
+          chain,
+          to: recipientAddress.trim(),
+          amount: amountInSmallestUnits, // Amount in smallest units
+          useTestnet: false, // TODO: Add testnet toggle if needed
+          transferMethod: 'transferAllowDeath', // Default transfer method
+        });
+
+        result = { txHash: substrateResult.txHash };
+      } else {
+        // Use regular EVM/other chain send endpoint
+        result = await walletApi.sendCrypto({
+          userId,
+          chain,
+          tokenAddress: selectedToken.address || undefined,
+          tokenDecimals: selectedToken.decimals,
+          amount: amount, // human-readable amount; server converts using ERC-20 decimals / Zerion
+          recipientAddress: recipientAddress.trim(),
+        });
+      }
 
       setTxHash(result.txHash);
       setSuccess(true);

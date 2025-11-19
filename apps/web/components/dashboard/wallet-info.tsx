@@ -5,11 +5,13 @@ import { useState, useEffect, useRef } from "react";
 import { useWallet } from "@/hooks/useWallet";
 import { walletStorage } from "@/lib/walletStorage";
 import { useBrowserFingerprint } from "@/hooks/useBrowserFingerprint";
+import { WalletConnectModal } from "./walletconnect-modal";
 
 const WalletInfo = () => {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [walletConnectOpen, setWalletConnectOpen] = useState(false);
   const { wallets, loading, error, loadWallets, changeWallets } = useWallet();
   
   // Use browser fingerprint as unique user ID
@@ -18,16 +20,19 @@ const WalletInfo = () => {
   // Load wallets when fingerprint is ready
   useEffect(() => {
     if (fingerprint) {
-      // First, try to load from localStorage immediately
+      // Clear cache if it doesn't have Substrate addresses (one-time migration)
       const cachedAddresses = walletStorage.getAddresses(fingerprint);
       if (cachedAddresses) {
-        // This will trigger processWallets inside the hook if wallets are empty
-        // But we need to load from cache immediately
-        loadWallets(fingerprint);
-      } else {
-        // No cache, load from API (first time)
-        loadWallets(fingerprint);
+        const hasSubstrate = cachedAddresses.auxiliary?.some(
+          (e) => e.category === 'substrate' && e.address
+        );
+        if (!hasSubstrate) {
+          console.log('🧹 Clearing cache - missing Substrate addresses');
+          walletStorage.clearAddresses();
+        }
       }
+      // Always load wallets (will fetch fresh if cache was cleared)
+      loadWallets(fingerprint);
     }
   }, [loadWallets, fingerprint]);
 
@@ -68,7 +73,7 @@ const WalletInfo = () => {
     } else if (action === 'copy' && currentWallet) {
       await copyToClipboard(currentWallet.address, currentSlide);
     } else if (action === 'connect') {
-      // Coming soon - do nothing for now
+      setWalletConnectOpen(true);
     }
     // Add other action handlers as needed
   };
@@ -199,7 +204,7 @@ const WalletInfo = () => {
                     side="top" 
                     className="bg-black/20 backdrop-blur-sm text-white text-xs px-3 rounded-lg border border-white/20 max-w-xs"
                   >
-                    <p>Coming Soon</p>
+                    <p>Connect to DApp</p>
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -252,7 +257,7 @@ const WalletInfo = () => {
                     side="top" 
                     className="bg-black/80 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg border border-white/20 max-w-xs shadow-lg"
                   >
-                    <p>Coming Soon</p>
+                    <p>Connect to DApp</p>
                   </TooltipContent>
                 )}
               </Tooltip>
@@ -261,6 +266,8 @@ const WalletInfo = () => {
         </TooltipProvider>
       </div>
 
+      {/* WalletConnect Modal */}
+      <WalletConnectModal open={walletConnectOpen} onOpenChange={setWalletConnectOpen} />
     </div>
   );
 };

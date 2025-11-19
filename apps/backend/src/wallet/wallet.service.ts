@@ -13,6 +13,8 @@ import { AddressManager } from './managers/address.manager.js';
 import { AccountFactory } from './factories/account.factory.js';
 import { PimlicoAccountFactory } from './factories/pimlico-account.factory.js';
 import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
+import { SubstrateManager } from './substrate/managers/substrate.manager.js';
+import { SubstrateChainKey } from './substrate/config/substrate-chain.config.js';
 import { IAccount } from './types/account.types.js';
 import { AllChainTypes, Erc4337Chain } from './types/chain.types.js';
 import {
@@ -137,6 +139,7 @@ export class WalletService {
     private accountFactory: AccountFactory,
     private pimlicoAccountFactory: PimlicoAccountFactory,
     private polkadotEvmRpcService: PolkadotEvmRpcService,
+    private substrateManager: SubstrateManager,
   ) {}
 
   /**
@@ -183,10 +186,12 @@ export class WalletService {
 
   async getWalletConnectAccounts(
     userId: string,
-  ): Promise<WalletConnectNamespacePayload> {
+  ): Promise<WalletConnectNamespacePayload[]> {
     const { metadata } = await this.addressManager.getManagedAddresses(userId);
+    const namespaces: WalletConnectNamespacePayload[] = [];
 
-    const namespace: WalletConnectNamespacePayload = {
+    // EIP155 namespace (EVM chains)
+    const eip155Namespace: WalletConnectNamespacePayload = {
       namespace: 'eip155',
       chains: [],
       accounts: [],
@@ -203,18 +208,67 @@ export class WalletService {
       }
 
       const chainTag = `eip155:${config.chainId}`;
-      namespace.chains.push(chainTag);
-      namespace.accounts.push(`${chainTag}:${address}`);
-      namespace.addressesByChain[chainTag] = address;
+      eip155Namespace.chains.push(chainTag);
+      eip155Namespace.accounts.push(`${chainTag}:${address}`);
+      eip155Namespace.addressesByChain[chainTag] = address;
     }
 
-    if (namespace.accounts.length === 0) {
+    if (eip155Namespace.accounts.length > 0) {
+      namespaces.push(eip155Namespace);
+    }
+
+    // Polkadot namespace (Substrate chains) - with error isolation
+    try {
+      const substrateAddresses = await this.substrateManager.getAddresses(userId, false);
+      const enabledChains = this.substrateManager.getEnabledChains();
+      
+      const polkadotNamespace: WalletConnectNamespacePayload = {
+        namespace: 'polkadot',
+        chains: [],
+        accounts: [],
+        addressesByChain: {},
+      };
+
+      for (const chain of enabledChains) {
+        const address = substrateAddresses[chain];
+        if (!address) {
+          continue;
+        }
+
+        const chainConfig = this.substrateManager.getChainConfig(chain, false);
+        const genesisHash = chainConfig.genesisHash;
+        const chainTag = `polkadot:${genesisHash}`;
+        const accountId = `polkadot:${genesisHash}:${address}`;
+
+        polkadotNamespace.chains.push(chainTag);
+        polkadotNamespace.accounts.push(accountId);
+        polkadotNamespace.addressesByChain[chainTag] = address;
+      }
+
+      if (polkadotNamespace.accounts.length > 0) {
+        namespaces.push(polkadotNamespace);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to register Polkadot namespace for WalletConnect: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      // Continue with other namespaces - error isolation (Issue #6)
+    }
+
+    if (namespaces.length === 0) {
       throw new BadRequestException(
         'No WalletConnect-compatible addresses found. Please initialize your wallet first.',
       );
     }
 
-    return namespace;
+    // Return first namespace for backward compatibility, but log that multiple namespaces are available
+    if (namespaces.length > 1) {
+      this.logger.debug(
+        `Multiple WalletConnect namespaces available: ${namespaces.map(n => n.namespace).join(', ')}`,
+      );
+    }
+
+    return namespaces;
   }
 
   private buildUiWalletPayload(
@@ -297,6 +351,28 @@ export class WalletService {
       }
     });
 
+    // Substrate chains
+    const substrateChains: WalletAddressKey[] = [
+      'polkadot',
+      'hydrationSubstrate',
+      'bifrostSubstrate',
+      'uniqueSubstrate',
+      'paseo',
+      'paseoAssethub',
+    ];
+    substrateChains.forEach((chain) => {
+      const entry = metadata[chain];
+      if (entry?.visible && entry.address) {
+        entries.push({
+          key: chain,
+          label: entry.label,
+          chain,
+          address: entry.address,
+          category: 'substrate',
+        });
+      }
+    });
+
     // Non-EVM chains
     this.NON_EVM_CHAIN_KEYS.forEach((chain) => {
       const entry = metadata[chain];
@@ -362,6 +438,17 @@ export class WalletService {
       assign(chain, 'erc4337', true),
     );
     this.NON_EVM_CHAIN_KEYS.forEach((chain) => assign(chain, 'nonEvm', true));
+    
+    // Substrate chains (visible)
+    const substrateChains: WalletAddressKey[] = [
+      'polkadot',
+      'hydrationSubstrate',
+      'bifrostSubstrate',
+      'uniqueSubstrate',
+      'paseo',
+      'paseoAssethub',
+    ];
+    substrateChains.forEach((chain) => assign(chain, 'substrate', true));
 
     return metadata;
   }
@@ -404,12 +491,49 @@ export class WalletService {
   }
 
   private isVisibleChain(chain: WalletAddressKey): boolean {
+    // Substrate chains
+    const SUBSTRATE_CHAIN_KEYS: Array<
+      | 'polkadot'
+      | 'hydrationSubstrate'
+      | 'bifrostSubstrate'
+      | 'uniqueSubstrate'
+      | 'paseo'
+      | 'paseoAssethub'
+    > = [
+      'polkadot',
+      'hydrationSubstrate',
+      'bifrostSubstrate',
+      'uniqueSubstrate',
+      'paseo',
+      'paseoAssethub',
+    ];
+    
+    // Polkadot EVM chains
+    const POLKADOT_EVM_CHAIN_KEYS: Array<
+      | 'moonbeamTestnet'
+      | 'astarShibuya'
+      | 'paseoPassetHub'
+    > = [
+      'moonbeamTestnet',
+      'astarShibuya',
+      'paseoPassetHub',
+    ];
+    
     return (
       this.SMART_ACCOUNT_CHAIN_KEYS.includes(
         chain as (typeof this.SMART_ACCOUNT_CHAIN_KEYS)[number],
       ) ||
       this.NON_EVM_CHAIN_KEYS.includes(
         chain as (typeof this.NON_EVM_CHAIN_KEYS)[number],
+      ) ||
+      SUBSTRATE_CHAIN_KEYS.includes(
+        chain as (typeof SUBSTRATE_CHAIN_KEYS)[number],
+      ) ||
+      POLKADOT_EVM_CHAIN_KEYS.includes(
+        chain as (typeof POLKADOT_EVM_CHAIN_KEYS)[number],
+      ) ||
+      this.EOA_CHAIN_KEYS.includes(
+        chain as (typeof this.EOA_CHAIN_KEYS)[number],
       )
     );
   }
@@ -3083,5 +3207,112 @@ export class WalletService {
       );
       return [];
     }
+  }
+
+  /**
+   * Get Substrate balances for all chains for a user
+   * 
+   * @param userId - User ID
+   * @param useTestnet - Whether to use testnet
+   * @returns Map of chain -> balance information
+   */
+  async getSubstrateBalances(
+    userId: string,
+    useTestnet: boolean = false,
+  ): Promise<Record<SubstrateChainKey, { balance: string; address: string | null; token: string; decimals: number }>> {
+    this.logger.log(`[WalletService] Getting Substrate balances for user ${userId} (testnet: ${useTestnet})`);
+    const balances = await this.substrateManager.getBalances(userId, useTestnet);
+    this.logger.log(`[WalletService] Received ${Object.keys(balances).length} Substrate chain balances`);
+    
+    const result: Record<string, { balance: string; address: string | null; token: string; decimals: number }> = {};
+
+    for (const [chain, data] of Object.entries(balances)) {
+      const chainConfig = this.substrateManager.getChainConfig(chain as SubstrateChainKey, useTestnet);
+      result[chain] = {
+        balance: data.balance,
+        address: data.address,
+        token: chainConfig.token.symbol,
+        decimals: chainConfig.token.decimals,
+      };
+      this.logger.debug(`[WalletService] ${chain}: ${data.balance} ${chainConfig.token.symbol} (address: ${data.address ? 'present' : 'null'})`);
+    }
+
+    this.logger.log(`[WalletService] Returning ${Object.keys(result).length} Substrate balances`);
+    return result as Record<SubstrateChainKey, { balance: string; address: string | null; token: string; decimals: number }>;
+  }
+
+  /**
+   * Get Substrate transaction history for a user
+   * 
+   * @param userId - User ID
+   * @param chain - Chain key
+   * @param useTestnet - Whether to use testnet
+   * @param limit - Number of transactions to fetch
+   * @param cursor - Pagination cursor
+   * @returns Transaction history
+   */
+  async getSubstrateTransactions(
+    userId: string,
+    chain: SubstrateChainKey,
+    useTestnet: boolean = false,
+    limit: number = 10,
+    cursor?: string,
+  ) {
+    return this.substrateManager.getUserTransactionHistory(
+      userId,
+      chain,
+      useTestnet,
+      limit,
+      cursor,
+    );
+  }
+
+  /**
+   * Get Substrate addresses for a user
+   * 
+   * @param userId - User ID
+   * @param useTestnet - Whether to use testnet
+   * @returns Substrate addresses
+   */
+  async getSubstrateAddresses(
+    userId: string,
+    useTestnet: boolean = false,
+  ) {
+    return this.substrateManager.getAddresses(userId, useTestnet);
+  }
+
+  /**
+   * Send Substrate transfer
+   * 
+   * @param userId - User ID
+   * @param chain - Chain key
+   * @param to - Recipient address
+   * @param amount - Amount in smallest units
+   * @param useTestnet - Whether to use testnet
+   * @param transferMethod - Transfer method ('transferAllowDeath' or 'transferKeepAlive')
+   * @param accountIndex - Account index (default: 0)
+   * @returns Transaction result
+   */
+  async sendSubstrateTransfer(
+    userId: string,
+    chain: SubstrateChainKey,
+    to: string,
+    amount: string,
+    useTestnet: boolean = false,
+    transferMethod?: 'transferAllowDeath' | 'transferKeepAlive',
+    accountIndex: number = 0,
+  ) {
+    return this.substrateManager.sendTransfer(
+      userId,
+      {
+        from: '', // Will be resolved from userId in SubstrateTransactionService
+        to,
+        amount,
+        chain,
+        useTestnet,
+        transferMethod,
+      },
+      accountIndex,
+    );
   }
 }

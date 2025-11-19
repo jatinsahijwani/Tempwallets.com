@@ -4,11 +4,13 @@ import { Keyring } from '@polkadot/keyring';
 import { SubstrateChainKey, getChainConfig } from '../config/substrate-chain.config.js';
 import { SubstrateRpcService } from './substrate-rpc.service.js';
 import { SubstrateAccountFactory } from '../factories/substrate-account.factory.js';
+import { SubstrateAddressManager } from '../managers/substrate-address.manager.js';
 import { NonceManager } from '../managers/nonce.manager.js';
 import { ensureCryptoReady } from '../utils/crypto-init.util.js';
 import { buildDerivationPath } from '../utils/derivation.util.js';
 import {
   TransferParams,
+  TransferMethod,
   TransactionParams,
   FeeEstimate,
   TransactionResult,
@@ -35,6 +37,7 @@ export class SubstrateTransactionService {
     private readonly accountFactory: SubstrateAccountFactory,
     private readonly nonceManager: NonceManager,
     private readonly seedManager: SeedManager,
+    private readonly addressManager: SubstrateAddressManager,
   ) {}
 
   /**
@@ -52,8 +55,38 @@ export class SubstrateTransactionService {
       await api.isReady;
 
       // Check if balances pallet is available
-      if (!api.tx || !api.tx.balances || !api.tx.balances.transfer) {
+      if (!api.tx || !api.tx.balances) {
         throw new Error('Balances pallet not available on this chain');
+      }
+
+      // Determine which transfer method to use
+      // Modern Substrate runtimes use transferAllowDeath or transferKeepAlive instead of transfer
+      const transferMethod: TransferMethod = params.transferMethod || 'transferAllowDeath';
+      
+      // Check if the requested method is available
+      const balancesTx = api.tx.balances as any;
+      if (!balancesTx[transferMethod]) {
+        // Fallback: try transferKeepAlive if transferAllowDeath not available
+        if (transferMethod === 'transferAllowDeath' && balancesTx.transferKeepAlive) {
+          this.logger.warn(
+            `transferAllowDeath not available, falling back to transferKeepAlive on ${params.chain}`,
+          );
+          const fallbackMethod = 'transferKeepAlive';
+          const amount = BigInt(params.amount);
+          return balancesTx[fallbackMethod](params.to, amount.toString());
+        }
+        // Fallback: try transferAllowDeath if transferKeepAlive not available
+        if (transferMethod === 'transferKeepAlive' && balancesTx.transferAllowDeath) {
+          this.logger.warn(
+            `transferKeepAlive not available, falling back to transferAllowDeath on ${params.chain}`,
+          );
+          const fallbackMethod = 'transferAllowDeath';
+          const amount = BigInt(params.amount);
+          return balancesTx[fallbackMethod](params.to, amount.toString());
+        }
+        throw new Error(
+          `Transfer method ${transferMethod} not available on this chain. Available methods: ${Object.keys(balancesTx).filter(k => typeof balancesTx[k] === 'function').join(', ')}`,
+        );
       }
 
       // Convert amount to proper format
@@ -61,7 +94,8 @@ export class SubstrateTransactionService {
 
       // Create transfer extrinsic
       // CRITICAL: Always use plain SS58 address string, never wrap in object
-      const transfer = api.tx.balances.transfer(
+      // Use transferAllowDeath (default) or transferKeepAlive instead of deprecated transfer
+      const transfer = balancesTx[transferMethod](
         params.to, // Plain SS58 address string
         amount.toString(),
       );
@@ -225,14 +259,20 @@ export class SubstrateTransactionService {
       // Get current block header for era calculation
       const currentHeader = await api.rpc.chain.getHeader();
       const mortalityPeriod = 64; // Blocks
+      
+      // CRITICAL: Get current block hash - required for mortal era (non-immortal)
+      // Polkadot.js v7+ requires blockHash when using a mortal era
+      const blockHash = currentHeader.hash.toHex();
 
-      // Sign transaction with nonce and era
+      // Sign transaction with nonce, era, and blockHash
+      // blockHash is required when using a mortal era (non-immortal)
       const signedTx = await transaction.signAsync(pair, {
         nonce,
         era: api.registry.createType('ExtrinsicEra', {
           current: currentHeader.number.toNumber(),
           period: mortalityPeriod,
         }),
+        blockHash, // Required for mortal era - checkpoint block hash
       });
 
       // Get transaction hash
@@ -356,8 +396,30 @@ export class SubstrateTransactionService {
     accountIndex: number = 0,
   ): Promise<TransactionResult> {
     try {
+      // Resolve from address from userId if not provided
+      let fromAddress: string = params.from;
+      if (!fromAddress) {
+        const resolvedAddress = await this.addressManager.getAddressForChain(
+          userId,
+          params.chain,
+          params.useTestnet,
+        );
+        if (!resolvedAddress) {
+          throw new BadRequestException(
+            `No address found for user ${userId} on chain ${params.chain}`,
+          );
+        }
+        fromAddress = resolvedAddress;
+      }
+
+      // Update params with resolved from address
+      const transferParams: TransferParams = {
+        ...params,
+        from: fromAddress,
+      };
+
       // Construct transaction
-      const transaction = await this.constructTransfer(params);
+      const transaction = await this.constructTransfer(transferParams);
 
       // Sign transaction
       const signed = await this.signTransaction(
@@ -377,7 +439,7 @@ export class SubstrateTransactionService {
 
       // Update nonce on success
       if (result.status === 'finalized' || result.status === 'inBlock') {
-        this.nonceManager.markNonceUsed(params.from, params.chain, signed.nonce, params.useTestnet);
+        this.nonceManager.markNonceUsed(fromAddress, params.chain, signed.nonce, params.useTestnet);
       }
 
       return result;
@@ -423,11 +485,21 @@ export class SubstrateTransactionService {
       }
 
       const transactions: TransactionHistoryEntry[] = [];
-      const maxBlocksToScan = Math.min(limit * 10, 1000); // Scan up to 1000 blocks
+      // Reduce max blocks to scan to prevent timeouts (scan up to 500 blocks or limit * 5, whichever is smaller)
+      const maxBlocksToScan = Math.min(limit * 5, 500);
       let blocksScanned = 0;
+      const startTime = Date.now();
+      const maxScanTime = 45000; // 45 seconds max scan time to leave buffer for response
 
       // Scan blocks backwards from startBlock
       for (let blockNum = startBlock; blockNum > 0 && transactions.length < limit && blocksScanned < maxBlocksToScan; blockNum--) {
+        // Check if we've exceeded the max scan time
+        if (Date.now() - startTime > maxScanTime) {
+          this.logger.warn(
+            `Transaction history scan timeout for ${address} on ${chain} after ${maxScanTime}ms. Returning ${transactions.length} transactions found so far.`,
+          );
+          break;
+        }
         try {
           const blockHash = await api.rpc.chain.getBlockHash(blockNum);
           const block = await api.rpc.chain.getBlock(blockHash);

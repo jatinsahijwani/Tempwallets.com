@@ -8,6 +8,13 @@
 import { SubstrateChainKey } from '../config/substrate-chain.config.js';
 
 /**
+ * Transfer method type
+ * - transferAllowDeath: Can kill account if balance drops to zero (recommended default)
+ * - transferKeepAlive: Will fail if transfer would drop account below existential deposit
+ */
+export type TransferMethod = 'transferAllowDeath' | 'transferKeepAlive';
+
+/**
  * Transaction parameters for constructing a transfer
  */
 export interface TransferParams {
@@ -16,6 +23,7 @@ export interface TransferParams {
   amount: string; // Amount in smallest units (as string to avoid precision loss)
   chain: SubstrateChainKey;
   useTestnet?: boolean;
+  transferMethod?: TransferMethod; // Default: 'transferAllowDeath'
 }
 
 /**

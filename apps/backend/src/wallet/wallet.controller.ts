@@ -18,6 +18,7 @@ import {
   WalletConnectSignDto,
 } from './dto/wallet.dto.js';
 import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
+import { SubstrateChainKey } from './substrate/config/substrate-chain.config.js';
 
 @Controller('wallet')
 export class WalletController {
@@ -77,7 +78,9 @@ export class WalletController {
     this.logger.log(`Getting WalletConnect accounts for user ${userId}`);
 
     try {
-      return await this.walletService.getWalletConnectAccounts(userId);
+      const namespaces = await this.walletService.getWalletConnectAccounts(userId);
+      // Return all namespaces (EIP155, Polkadot, etc.)
+      return namespaces;
     } catch (error) {
       this.logger.error(
         `Failed to get WalletConnect accounts: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -469,6 +472,180 @@ export class WalletController {
         `Failed to test RPC transactions: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Get Substrate addresses for a user
+   * GET /wallet/substrate/addresses?userId=xxx&useTestnet=false
+   */
+  @Get('substrate/addresses')
+  async getSubstrateAddresses(
+    @Query('userId') userId: string,
+    @Query('useTestnet') useTestnet?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+
+    const useTestnetBool = useTestnet === 'true';
+
+    try {
+      // Get Substrate addresses through WalletService
+      const substrateAddresses = await this.walletService.getSubstrateAddresses(userId, useTestnetBool);
+
+      return {
+        userId,
+        useTestnet: useTestnetBool,
+        addresses: substrateAddresses,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get Substrate addresses: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get Substrate balances for a user
+   * GET /wallet/substrate/balances?userId=xxx&useTestnet=false
+   */
+  @Get('substrate/balances')
+  async getSubstrateBalances(
+    @Query('userId') userId: string,
+    @Query('useTestnet') useTestnet?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+
+    const useTestnetBool = useTestnet === 'true';
+    this.logger.log(`Getting Substrate balances for user ${userId} (testnet: ${useTestnetBool})`);
+
+    try {
+      const balances = await this.walletService.getSubstrateBalances(userId, useTestnetBool);
+      this.logger.log(`Successfully retrieved Substrate balances for user ${userId}: ${Object.keys(balances).length} chains`);
+      return {
+        userId,
+        useTestnet: useTestnetBool,
+        balances,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get Substrate balances for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Get Substrate transaction history
+   * GET /wallet/substrate/transactions?userId=xxx&chain=polkadot&useTestnet=false&limit=10&cursor=xxx
+   */
+  @Get('substrate/transactions')
+  async getSubstrateTransactions(
+    @Query('userId') userId: string,
+    @Query('chain') chain: string,
+    @Query('useTestnet') useTestnet?: string,
+    @Query('limit') limit?: string,
+    @Query('cursor') cursor?: string,
+  ) {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+    if (!chain) {
+      throw new BadRequestException('chain is required');
+    }
+
+    const useTestnetBool = useTestnet === 'true';
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+
+    try {
+      const history = await this.walletService.getSubstrateTransactions(
+        userId,
+        chain as SubstrateChainKey,
+        useTestnetBool,
+        limitNum,
+        cursor,
+      );
+
+      return {
+        userId,
+        chain,
+        useTestnet: useTestnetBool,
+        history,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to get Substrate transactions: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Send Substrate transfer
+   * POST /wallet/substrate/send
+   */
+  @Post('substrate/send')
+  @HttpCode(HttpStatus.OK)
+  async sendSubstrateTransfer(@Body() body: {
+    userId: string;
+    chain: SubstrateChainKey;
+    to: string;
+    amount: string;
+    useTestnet?: boolean;
+    transferMethod?: 'transferAllowDeath' | 'transferKeepAlive';
+  }) {
+    if (!body.userId || !body.chain || !body.to || !body.amount) {
+      throw new BadRequestException('userId, chain, to, and amount are required');
+    }
+
+    try {
+      const result = await this.walletService.sendSubstrateTransfer(
+        body.userId,
+        body.chain,
+        body.to,
+        body.amount,
+        body.useTestnet || false,
+        body.transferMethod,
+        0, // accountIndex
+      );
+
+      return {
+        success: result.status !== 'failed' && result.status !== 'error',
+        txHash: result.txHash,
+        status: result.status,
+        blockHash: result.blockHash,
+        error: result.error,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to send Substrate transfer: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Health check for Substrate functionality
+   * GET /wallet/substrate/health
+   */
+  @Get('substrate/health')
+  async getSubstrateHealth() {
+    try {
+      // Access through a public method or create a health check method in WalletService
+      // For now, return basic health status
+      return {
+        status: 'ok',
+        message: 'Substrate functionality is available',
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
     }
   }
 }

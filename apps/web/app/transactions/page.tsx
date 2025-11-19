@@ -29,6 +29,13 @@ const CHAIN_NAMES: Record<string, string> = {
   moonbeamTestnet: "Moonbeam Testnet",
   astarShibuya: "Astar Shibuya",
   paseoPassetHub: "Paseo PassetHub",
+  // Substrate/Polkadot chains
+  polkadot: "Polkadot",
+  hydrationSubstrate: "Hydration (Substrate)",
+  bifrostSubstrate: "Bifrost (Substrate)",
+  uniqueSubstrate: "Unique (Substrate)",
+  paseo: "Paseo",
+  paseoAssethub: "Paseo AssetHub",
 };
 
 const NATIVE_TOKEN_SYMBOLS: Record<string, string> = {
@@ -51,6 +58,13 @@ const NATIVE_TOKEN_SYMBOLS: Record<string, string> = {
   moonbeamTestnet: 'DEV',
   astarShibuya: 'SBY',
   paseoPassetHub: 'PAS',
+  // Substrate/Polkadot chains
+  polkadot: 'DOT',
+  hydrationSubstrate: 'HDX',
+  bifrostSubstrate: 'BFC',
+  uniqueSubstrate: 'UNQ',
+  paseo: 'PAS',
+  paseoAssethub: 'PAS',
 };
 
 const getNativeTokenSymbol = (chain: string): string => {
@@ -77,9 +91,15 @@ interface ChainBalance {
 // Polkadot EVM compatible chains
 const POLKADOT_EVM_CHAINS = ['moonbeamTestnet', 'astarShibuya', 'paseoPassetHub'];
 
+// Substrate/Polkadot chains
+const SUBSTRATE_CHAINS = ['polkadot', 'hydrationSubstrate', 'bifrostSubstrate', 'uniqueSubstrate', 'paseo', 'paseoAssethub'];
+
 const getChainCategory = (chain: string): string | undefined => {
   if (POLKADOT_EVM_CHAINS.includes(chain)) {
     return 'polkadot-evm';
+  }
+  if (SUBSTRATE_CHAINS.includes(chain)) {
+    return 'substrate';
   }
   return undefined;
 };
@@ -100,13 +120,18 @@ export default function TransactionsPage() {
   }, [fingerprint]);
 
   const loadBalances = async () => {
-    if (!fingerprint) return;
+    if (!fingerprint) {
+      console.log('⏸️ No fingerprint available, skipping balance load');
+      return;
+    }
 
+    console.log('🚀 Starting loadBalances for user:', fingerprint);
     setLoading(true);
     setError(null);
     setChainBalances([]);
 
     try {
+      // Load EVM and other chain assets
       const assets = await walletApi.getAssetsAny(fingerprint);
 
       // Group assets by chain and split native vs tokens
@@ -138,6 +163,52 @@ export default function TransactionsPage() {
         map.set(a.chain, existing);
       }
 
+      // Load Substrate balances
+      try {
+        console.log('🔄 Fetching Substrate balances for user:', fingerprint);
+        const substrateBalances = await walletApi.getSubstrateBalances(fingerprint, false);
+        console.log('✅ Substrate balances received:', substrateBalances);
+        
+        // Map backend chain keys to frontend chain keys
+        const chainKeyMap: Record<string, string> = {
+          polkadot: 'polkadot',
+          hydration: 'hydrationSubstrate',
+          bifrost: 'bifrostSubstrate',
+          unique: 'uniqueSubstrate',
+          paseo: 'paseo',
+          paseoAssethub: 'paseoAssethub',
+        };
+        
+        let substrateCount = 0;
+        for (const [backendChain, balanceData] of Object.entries(substrateBalances)) {
+          if (!balanceData.address) {
+            console.log(`⏭️ Skipping ${backendChain}: no address`);
+            continue; // Skip if no address
+          }
+          
+          // Map backend chain key to frontend chain key
+          const frontendChain = chainKeyMap[backendChain] || backendChain;
+          
+          // Always add Substrate chains, even with zero balance (like Polkadot EVM chains)
+          const balance = parseFloat(balanceData.balance);
+          map.set(frontendChain, {
+            chain: frontendChain,
+            nativeBalance: balanceData.balance,
+            nativeDecimals: balanceData.decimals,
+            nativeBalanceHuman: balance > 0 ? formatBalance(balanceData.balance, balanceData.decimals) : undefined,
+            tokens: [],
+            category: 'substrate'
+          });
+          substrateCount++;
+          console.log(`✅ Added Substrate chain ${frontendChain} (${backendChain}): ${balanceData.balance} ${balanceData.token}`);
+        }
+        console.log(`📊 Total Substrate chains added: ${substrateCount}`);
+      } catch (substrateErr) {
+        console.error('❌ Failed to load Substrate balances:', substrateErr);
+        console.error('Error details:', substrateErr instanceof Error ? substrateErr.message : String(substrateErr));
+        // Don't fail the whole load if Substrate fails
+      }
+
       const balances = Array.from(map.values());
       
       // Ensure Polkadot EVM chains are always present, even with zero balance
@@ -151,6 +222,30 @@ export default function TransactionsPage() {
             nativeBalanceHuman: undefined,
             tokens: [],
             category: 'polkadot-evm'
+          });
+        }
+      });
+      
+      // Ensure Substrate chains are always present, even with zero balance
+      const existingSubstrateChains = balances.filter(cb => cb.category === 'substrate').map(cb => cb.chain);
+      SUBSTRATE_CHAINS.forEach(chain => {
+        if (!existingSubstrateChains.includes(chain)) {
+          // Get default decimals for Substrate chains
+          const defaultDecimals: Record<string, number> = {
+            polkadot: 10,
+            hydrationSubstrate: 12,
+            bifrostSubstrate: 12,
+            uniqueSubstrate: 18,
+            paseo: 10,
+            paseoAssethub: 10,
+          };
+          balances.push({
+            chain,
+            nativeBalance: '0',
+            nativeDecimals: defaultDecimals[chain] || 10,
+            nativeBalanceHuman: undefined,
+            tokens: [],
+            category: 'substrate'
           });
         }
       });
@@ -182,6 +277,13 @@ export default function TransactionsPage() {
       arbitrumErc4337: 'arbitrumErc4337',
       polygonErc4337: 'polygonErc4337',
       avalancheErc4337: 'avalancheErc4337',
+      // Substrate chains - pass through as-is
+      polkadot: 'polkadot',
+      hydrationSubstrate: 'hydrationSubstrate',
+      bifrostSubstrate: 'bifrostSubstrate',
+      uniqueSubstrate: 'uniqueSubstrate',
+      paseo: 'paseo',
+      paseoAssethub: 'paseoAssethub',
     };
     return m[chain] || null;
   };
@@ -258,6 +360,10 @@ export default function TransactionsPage() {
                       if (chainBalance.category === 'polkadot-evm') {
                         return true;
                       }
+                      // For Substrate chains, always show (even with zero balance) - like Polkadot EVM chains
+                      if (chainBalance.category === 'substrate') {
+                        return true;
+                      }
                       // For other chains, only show if they have non-zero balance
                       const nativeBalance = parseFloat(chainBalance.nativeBalance);
                       const hasTokenBalance = chainBalance.tokens.some(token => parseFloat(token.balance) > 0);
@@ -302,6 +408,12 @@ export default function TransactionsPage() {
                             ))}
                             {/* Show "No balance" for Polkadot EVM chains with zero balance */}
                             {chainBalance.category === 'polkadot-evm' && 
+                             parseFloat(chainBalance.nativeBalance) === 0 && 
+                             formattedTokens.length === 0 && (
+                              <p className="text-sm text-muted-foreground">No balance</p>
+                            )}
+                            {/* Show "No balance" for Substrate chains with zero balance */}
+                            {chainBalance.category === 'substrate' && 
                              parseFloat(chainBalance.nativeBalance) === 0 && 
                              formattedTokens.length === 0 && (
                               <p className="text-sm text-muted-foreground">No balance</p>
