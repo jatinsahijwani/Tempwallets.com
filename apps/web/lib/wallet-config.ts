@@ -7,6 +7,7 @@ import Polygon from '@thirdweb-dev/chain-icons/dist/polygon';
 import Avalanche from '@thirdweb-dev/chain-icons/dist/avalanche';
 import Tron from '@thirdweb-dev/chain-icons/dist/tron';
 import Arbitrum from '@thirdweb-dev/chain-icons/dist/arbitrum';
+import Base from '../components/icons/BaseIcon';
 
 import {
   WalletConfig,
@@ -14,9 +15,6 @@ import {
   ChainType,
   ChainGroup,
 } from '@/types/wallet.types';
-
-// Base icon is not available, use Ethereum as fallback
-const Base = Ethereum;
 
 // Fallback icon for chains without specific icons (using Polkadot as generic Substrate icon)
 const SubstrateFallback = Polkadot;
