@@ -34,7 +34,7 @@ export function ChainSelector({
   // Group chains by type for better organization
   const groupedChains = useMemo(() => {
     const groups: Record<string, typeof allChains> = {
-      'EVM Smart Accounts': [],
+      'Gasless': [],
       'EVM Chains': [],
       'Substrate': [],
       'Other': [],
@@ -42,7 +42,7 @@ export function ChainSelector({
 
     allChains.forEach((chain) => {
       if (chain.isSmartAccount) {
-        groups['EVM Smart Accounts']!.push(chain);
+        groups['Gasless']!.push(chain);
       } else if (chain.type === 'evm') {
         groups['EVM Chains']!.push(chain);
       } else if (chain.type === 'substrate') {
@@ -64,7 +64,7 @@ export function ChainSelector({
   return (
     <>
       <div className={cn('rounded-3xl p-4 md:p-6 mt-4', className)} style={{ backgroundColor: '#292828' }}>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <h3 className="text-white text-sm md:text-base font-rubik-regular">More Networks</h3>
           <button
             onClick={() => setShowList(true)}
@@ -207,7 +207,7 @@ export function ChainSelector({
                             )}
                             {chain.isSmartAccount && (
                               <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded-full font-rubik-medium">
-                                Smart Account
+                                Gasless
                               </span>
                             )}
                           </div>

@@ -27,7 +27,7 @@ export function BalanceTransactionsToggle() {
   };
 
   return (
-    <div className="w-full bg-white rounded-3xl pt-4 border-t border-gray-200 shadow-sm md:max-w-2xl md:mx-auto mt-4 mb-4 flex-1 flex flex-col">
+    <div className="w-full bg-white rounded-3xl pt-4 border-t border-gray-200 shadow-sm md:max-w-2xl md:mx-auto mt-2 mb-4 flex-1 flex flex-col">
       {/* Top Divider */}
       <div className="flex justify-center mb-2 mx-4 md:mx-6">
         <div className="w-10 h-1 bg-gray-200 rounded-full"></div>

@@ -6,6 +6,7 @@ import { useWalletV2 } from "@/hooks/useWalletV2";
 import { walletStorage } from "@/lib/walletStorage";
 import { useBrowserFingerprint } from "@/hooks/useBrowserFingerprint";
 import { WalletConnectModal } from "./walletconnect-modal";
+import { EvmWalletConnectModal } from "./evm-walletconnect-modal";
 import { WalletCard } from "./wallet-card";
 import { ChainSelector } from "./chain-selector";
 import { DEFAULT_CHAIN, getChainById } from "@/lib/chains";
@@ -15,7 +16,8 @@ const WalletInfo = () => {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
   const [selectedChainId, setSelectedChainId] = useState(DEFAULT_CHAIN.id);
-  const [walletConnectOpen, setWalletConnectOpen] = useState(false);
+  const [substrateWalletConnectOpen, setSubstrateWalletConnectOpen] = useState(false);
+  const [evmWalletConnectOpen, setEvmWalletConnectOpen] = useState(false);
   const { wallets, loading, error, loadWallets, getWalletByChainType } = useWalletV2();
   const walletConfig = useWalletConfig();
   
@@ -28,7 +30,9 @@ const WalletInfo = () => {
     ? { ...selectedChainConfig, hasWalletConnect: selectedChainConfig.capabilities.walletConnect }
     : (getChainById(selectedChainId) ?? DEFAULT_CHAIN);
   
-  const currentWallet = getWalletByChainType(selectedChain.type);
+  // Get wallet by specific chain ID instead of just by type
+  // This ensures we get the correct wallet when switching between EOA and Smart Account variants
+  const currentWallet = wallets.find(w => w.chain === selectedChainId) || getWalletByChainType(selectedChain.type);
 
   // Load wallets when fingerprint is ready
   useEffect(() => {
@@ -100,9 +104,13 @@ const WalletInfo = () => {
     } else if (action === 'send') {
       router.push('/transactions');
     } else if (action === 'connect') {
-      // Only allow WalletConnect for EVM chains
+      // Open appropriate WalletConnect modal based on chain type
       if (selectedChain.hasWalletConnect) {
-        setWalletConnectOpen(true);
+        if (selectedChain.type === 'evm') {
+          setEvmWalletConnectOpen(true);
+        } else if (selectedChain.type === 'substrate') {
+          setSubstrateWalletConnectOpen(true);
+        }
       }
     }
   };
@@ -167,7 +175,9 @@ const WalletInfo = () => {
                     >
                       <p>
                         {selectedChain.hasWalletConnect 
-                          ? 'Connect to DApp' 
+                          ? selectedChain.type === 'evm' 
+                            ? 'Connect to EVM DApp (Uniswap, Aave, etc.)'
+                            : 'Connect to Polkadot DApp (Hydration, etc.)'
                           : `WalletConnect not available for ${selectedChain.name}`}
                       </p>
                     </TooltipContent>
@@ -185,8 +195,18 @@ const WalletInfo = () => {
         onChainChange={setSelectedChainId}
       />
 
-      {/* WalletConnect Modal */}
-      <WalletConnectModal open={walletConnectOpen} onOpenChange={setWalletConnectOpen} />
+      {/* WalletConnect Modals */}
+      {/* Substrate/Polkadot WalletConnect */}
+      <WalletConnectModal 
+        open={substrateWalletConnectOpen} 
+        onOpenChange={setSubstrateWalletConnectOpen} 
+      />
+      
+      {/* EVM WalletConnect */}
+      <EvmWalletConnectModal 
+        open={evmWalletConnectOpen} 
+        onOpenChange={setEvmWalletConnectOpen} 
+      />
     </div>
   );
 };

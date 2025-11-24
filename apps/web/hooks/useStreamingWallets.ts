@@ -56,12 +56,12 @@ export interface UseStreamingWalletsReturn {
 function mapBackendKeyToConfigId(key: string): string {
   // Direct mappings for known backend keys
   const keyMap: Record<string, string> = {
-    // EVM Standard (EOA)
-    'ethereum': 'ethereum',
-    'base': 'base',
-    'arbitrum': 'arbitrum',
-    'polygon': 'polygon',
-    'avalanche': 'avalanche',
+    // EVM Standard (EOA) - backend uses short names, frontend uses 'Eoa' suffix
+    'ethereum': 'ethereumEoa',
+    'base': 'baseEoa',
+    'arbitrum': 'arbitrumEoa',
+    'polygon': 'polygonEoa',
+    'avalanche': 'avalancheEoa',
     
     // EVM Smart Accounts (ERC-4337)
     'ethereumErc4337': 'ethereumErc4337',

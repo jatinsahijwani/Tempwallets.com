@@ -469,6 +469,94 @@ export const walletApi = {
       body: JSON.stringify(data),
     });
   },
+
+  /**
+   * Get EVM WalletConnect accounts (CAIP-10 formatted)
+   */
+  async getEvmWalletConnectAccounts(
+    userId: string,
+    useTestnet: boolean = false,
+  ): Promise<{
+    userId: string;
+    useTestnet: boolean;
+    accounts: Array<{
+      accountId: string; // CAIP-10 format: eip155:<chain_id>:<address>
+      chainId: string;
+      address: string;
+      chainName: string; // Internal chain name (ethereum, base, etc.)
+    }>;
+  }> {
+    return fetchApi<{
+      userId: string;
+      useTestnet: boolean;
+      accounts: Array<{
+        accountId: string;
+        chainId: string;
+        address: string;
+        chainName: string;
+      }>;
+    }>(`/wallet/evm/walletconnect/accounts?userId=${userId}&useTestnet=${useTestnet}`);
+  },
+
+  /**
+   * Sign an EVM transaction for WalletConnect
+   */
+  async signEvmWalletConnectTransaction(data: {
+    userId: string;
+    accountId: string; // CAIP-10 format
+    transaction: {
+      from: string;
+      to?: string;
+      value?: string;
+      data?: string;
+      gas?: string;
+      gasPrice?: string;
+      maxFeePerGas?: string;
+      maxPriorityFeePerGas?: string;
+      nonce?: string;
+    };
+    useTestnet?: boolean;
+  }): Promise<{ signature: string }> {
+    return fetchApi<{ signature: string }>('/wallet/evm/walletconnect/sign-transaction', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Sign an EVM message for WalletConnect (personal_sign)
+   */
+  async signEvmWalletConnectMessage(data: {
+    userId: string;
+    accountId: string; // CAIP-10 format
+    message: string;
+    useTestnet?: boolean;
+  }): Promise<{ signature: string }> {
+    return fetchApi<{ signature: string }>('/wallet/evm/walletconnect/sign-message', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Sign EVM typed data for WalletConnect (eth_signTypedData)
+   */
+  async signEvmWalletConnectTypedData(data: {
+    userId: string;
+    accountId: string; // CAIP-10 format
+    typedData: {
+      types: Record<string, any>;
+      primaryType: string;
+      domain: Record<string, any>;
+      message: Record<string, any>;
+    };
+    useTestnet?: boolean;
+  }): Promise<{ signature: string }> {
+    return fetchApi<{ signature: string }>('/wallet/evm/walletconnect/sign-typed-data', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 /**

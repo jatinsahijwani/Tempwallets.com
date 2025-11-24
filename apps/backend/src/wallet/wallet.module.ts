@@ -20,12 +20,14 @@ import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
 import { TokenListService } from './services/token-list.service.js';
 // Import Substrate module
 import { SubstrateModule } from './substrate/substrate.module.js';
+// Import EVM module
+import { EvmModule } from './evm/evm.module.js';
 // Import cache repositories
 import { AddressCacheRepository } from './repositories/address-cache.repository.js';
 import { BalanceCacheRepository } from './repositories/balance-cache.repository.js';
 
 @Module({
-  imports: [PrismaModule, CryptoModule, SubstrateModule],
+  imports: [PrismaModule, CryptoModule, SubstrateModule, EvmModule],
   controllers: [WalletController],
   providers: [
     WalletService,
@@ -54,6 +56,9 @@ import { BalanceCacheRepository } from './repositories/balance-cache.repository.
     WalletService,
     SeedRepository,
     ZerionService,
+    // Configuration services
+    ChainConfigService,
+    PimlicoConfigService,
     // Export managers and factories for use in other modules if needed
     SeedManager,
     AddressManager,

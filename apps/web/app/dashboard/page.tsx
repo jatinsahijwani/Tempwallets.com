@@ -13,7 +13,7 @@ export default function DashboardPage() {
       <UpperBar />
 
       {/* Main Content with padding for wallet info */}
-      <div className="pt-16 lg:pt-20 py-8 px-4 sm:px-6 lg:px-8 space-y-6 flex-shrink-0">
+      <div className="pt-16 lg:pt-20 py-2 px-4 sm:px-6 lg:px-8 space-y-1 flex-shrink-0">
         <WalletInfo />
       </div>
       

@@ -220,7 +220,7 @@ export const mapWalletCategoryToChainType = (category?: string): ChainType | nul
  */
 export const DEFAULT_CHAIN: Chain = {
   id: 'ethereumErc4337',
-  name: 'Ethereum',
+  name: 'Ethereum Gasless',
   symbol: 'ETH',
   icon: Ethereum,
   type: 'evm',
