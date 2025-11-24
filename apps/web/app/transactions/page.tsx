@@ -8,7 +8,7 @@ import { walletApi, TokenBalance, ApiError } from "@/lib/api";
 import { useBrowserFingerprint } from "@/hooks/useBrowserFingerprint";
 import { useWalletData } from "@/hooks/useWalletData";
 import { SendCryptoModal } from "@/components/dashboard/send-crypto-modal";
-import RecentTransactions from "@/components/dashboard/recent-transactions";
+import { BalanceTransactionsToggle } from "@/components/dashboard/balance-transactions-toggle";
 
 const CHAIN_NAMES: Record<string, string> = {
   // Zerion canonical chain ids
@@ -388,9 +388,9 @@ export default function TransactionsPage() {
           />
         )}
 
-        {/* Transaction List */}
+        {/* Balance/Transactions Toggle */}
         <div className="mt-8">
-          <RecentTransactions showAll={true} />
+          <BalanceTransactionsToggle />
         </div>
       </div>
     </div>
