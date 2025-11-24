@@ -21,7 +21,7 @@ export default function Home() {
             <WalletInfo />
           </div>
           
-          {/* Recent Transactions - Full width on mobile, constrained on desktop */}
+          {/* Recent Transactions - Full width on mobile, constrained on desktop */}   
           <RecentTransactions />
         </div>
       </main>

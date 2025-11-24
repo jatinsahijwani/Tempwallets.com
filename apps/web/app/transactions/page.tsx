@@ -9,7 +9,7 @@ import { useBrowserFingerprint } from "@/hooks/useBrowserFingerprint";
 import { useWalletData } from "@/hooks/useWalletData";
 import { SendCryptoModal } from "@/components/dashboard/send-crypto-modal";
 import RecentTransactions from "@/components/dashboard/recent-transactions";
-
+  
 const CHAIN_NAMES: Record<string, string> = {
   // Zerion canonical chain ids
   ethereum: "Ethereum",
