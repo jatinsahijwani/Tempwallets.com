@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@repo/ui/components/ui/alert-dialog";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWalletV2 } from "@/hooks/useWalletV2";
 import { walletStorage } from "@/lib/walletStorage";
@@ -26,7 +26,6 @@ import { ChainSelector } from "./chain-selector";
 import { DEFAULT_CHAIN, getChainById } from "@/lib/chains";
 import { useWalletConfig } from "@/hooks/useWalletConfig";
 import { trackMixpanelEvent } from "@/lib/mixpanel";
-import { useXP } from "@/hooks/useXP";
 
 const WalletInfo = () => {
   const router = useRouter();
@@ -94,13 +93,19 @@ const WalletInfo = () => {
     }
   }, [currentWallet, loading, error, selectedChainId, selectedChain, selectedChainConfig]);
 
+  // Track loading state to prevent duplicate calls
+  const loadingRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
+
   // Load wallets when userId is ready and auth loading is complete
   useEffect(() => {
-    console.log('🔍 Auth state:', { authLoading, isAuthenticated, userId, fingerprint, user: user?.email });
-    
     // Wait for auth to complete loading before loading wallets
     if (authLoading) {
-      console.log('⏳ Waiting for auth to complete...');
+      return;
+    }
+    
+    // Don't reload if userId hasn't changed and we're already loading
+    if (loadingRef.current && lastUserIdRef.current === userId) {
       return;
     }
     
@@ -112,17 +117,23 @@ const WalletInfo = () => {
           (e) => e.category === 'substrate' && e.address
         );
         if (!hasSubstrate) {
-          console.log('🧹 Clearing cache - missing Substrate addresses');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('Clearing cache - missing Substrate addresses');
+          }
           walletStorage.clearAddresses();
         }
       }
-      // Always load wallets (will fetch fresh if cache was cleared)
-      console.log('📦 Loading wallets for userId:', userId, isAuthenticated ? '(Google)' : '(fingerprint)');
-      loadWallets(userId);
-    } else {
-      console.log('❌ No userId available');
+      
+      // Track loading state
+      loadingRef.current = true;
+      lastUserIdRef.current = userId;
+      
+      // Load wallets
+      loadWallets(userId).finally(() => {
+        loadingRef.current = false;
+      });
     }
-  }, [loadWallets, userId, authLoading, isAuthenticated, fingerprint, user]);
+  }, [userId, authLoading]); // Only depend on userId and authLoading
 
   // History button is always visible (blurred when not authenticated)
   const actions = [

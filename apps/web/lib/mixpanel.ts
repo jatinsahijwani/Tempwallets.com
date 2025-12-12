@@ -2,6 +2,7 @@ import mixpanel from "mixpanel-browser";
 
 let initialized = false;
 let cachedToken: string | undefined;
+let tokenWarningShown = false; // Prevent repeated warnings
 
 const getToken = () => {
   if (typeof window === "undefined") return undefined;
@@ -15,7 +16,11 @@ const getToken = () => {
     process.env.NEXT_PUBLIC_MIXPANEL_TOKEN_DEV;
 
   if (!token) {
-    console.warn("Mixpanel token is not configured.");
+    // Only warn once
+    if (!tokenWarningShown) {
+      console.warn("Mixpanel token is not configured.");
+      tokenWarningShown = true;
+    }
     return undefined;
   }
 

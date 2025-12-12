@@ -1,3 +1,10 @@
+import type {
+  UserProfile,
+  UserStats,
+  UserActivity,
+  UpdateProfileRequest,
+} from '@repo/types';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5005';
 
 export interface SmartAccountSummary {
@@ -957,22 +964,32 @@ export function subscribeToSSE<T>(
   let isClosed = false;
 
   eventSource.onmessage = (event) => {
+    if (isClosed) return;
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'complete') {
         if (onComplete) onComplete();
-        eventSource.close();
-        isClosed = true;
+        if (!isClosed) {
+          eventSource.close();
+          isClosed = true;
+        }
         return;
       }
       onMessage(data);
     } catch (error) {
-      console.error('Error parsing SSE message:', error);
+      // Only log parsing errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error parsing SSE message:', error);
+      }
     }
   };
 
   eventSource.onerror = (error) => {
-    console.error('SSE error:', error);
+    if (isClosed) return;
+    // Only log SSE errors in development
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('SSE connection error (will retry or fallback to batch)');
+    }
     if (onError) {
       onError(new Error('SSE connection error'));
     }
@@ -982,11 +999,11 @@ export function subscribeToSSE<T>(
     }
   };
 
-  // Return cleanup function
+  // Return cleanup function that properly closes EventSource
   return () => {
     if (!isClosed) {
-      eventSource.close();
       isClosed = true;
+      eventSource.close();
     }
   };
 }
@@ -1091,15 +1108,15 @@ export const userApi = {
   /**
    * Get current user profile
    */
-  async getProfile(): Promise<import('@repo/types').UserProfile> {
-    return fetchApi<import('@repo/types').UserProfile>('/user/profile');
+  async getProfile(): Promise<UserProfile> {
+    return fetchApi<UserProfile>('/user/profile');
   },
 
   /**
    * Update user profile
    */
-  async updateProfile(data: import('@repo/types').UpdateProfileRequest): Promise<import('@repo/types').UserProfile> {
-    return fetchApi<import('@repo/types').UserProfile>('/user/profile', {
+  async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
+    return fetchApi<UserProfile>('/user/profile', {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
@@ -1108,15 +1125,15 @@ export const userApi = {
   /**
    * Get user statistics
    */
-  async getStats(): Promise<import('@repo/types').UserStats> {
-    return fetchApi<import('@repo/types').UserStats>('/user/stats');
+  async getStats(): Promise<UserStats> {
+    return fetchApi<UserStats>('/user/stats');
   },
 
   /**
    * Get user activity
    */
-  async getActivity(limit: number = 50): Promise<import('@repo/types').UserActivity[]> {
-    return fetchApi<import('@repo/types').UserActivity[]>(`/user/activity?limit=${limit}`);
+  async getActivity(limit: number = 50): Promise<UserActivity[]> {
+    return fetchApi<UserActivity[]>(`/user/activity?limit=${limit}`);
   },
 
   /**
