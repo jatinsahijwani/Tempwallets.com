@@ -35,15 +35,21 @@ export const initMixpanel = () => {
   const token = getToken();
   if (!token) return;
 
-  mixpanel.init(token, {
+  // Initialize with valid config options
+  // Some advanced options may not be in TypeScript types but work at runtime
+  const config: Parameters<typeof mixpanel.init>[1] = {
     debug: process.env.NODE_ENV === "development",
     track_pageview: false, // DISABLE automatic tracking to prevent duplicates
     persistence: "localStorage",
-    batch_size: 50,
-    batch_interval: 30000, // Send events every 30 seconds or when batch full
-    record_sessions_percent: 10, // Record 10% of sessions for heatmaps (cost optimization)
-    opt_track_anonID: false,
-  });
+  };
+
+  // Add advanced options that may not be in types but are supported at runtime
+  (config as any).batch_size = 50;
+  (config as any).batch_interval = 30000; // Send events every 30 seconds or when batch full
+  (config as any).record_sessions_percent = 10; // Record 10% of sessions for heatmaps
+  (config as any).opt_track_anonID = false;
+
+  mixpanel.init(token, config);
 
   initialized = true;
   const distinctId = mixpanel.get_distinct_id();
