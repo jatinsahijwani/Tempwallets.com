@@ -250,7 +250,6 @@ export function getEnabledChains(): SubstrateChainKey[] {
   const chains: SubstrateChainKey[] = [
     'polkadot',
     'hydration',
-    'bifrost',
     'unique',
     'paseo',
     'paseoAssethub',
@@ -293,7 +292,6 @@ export function findChainFromAddress(address: string): {
   const chains: SubstrateChainKey[] = [
     'polkadot',
     'hydration',
-    'bifrost',
     'unique',
     'paseo',
     'paseoAssethub',

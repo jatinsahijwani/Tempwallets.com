@@ -78,6 +78,16 @@ export class SubstrateRpcService implements OnModuleInit, OnModuleDestroy {
     chain: SubstrateChainKey,
     useTestnet?: boolean,
   ): Promise<ApiPromise> {
+    // Temporary hard-disable for Bifrost Substrate RPC to avoid noisy / unstable WS connections
+    // This prevents any WebSocket from being opened for Bifrost while keeping the rest
+    // of the Substrate integration intact.
+    if (chain === 'bifrost') {
+      this.logger.debug(
+        `Substrate RPC for Bifrost is disabled; skipping connection for ${useTestnet ? 'testnet' : 'mainnet'}`,
+      );
+      throw new Error('Substrate RPC for Bifrost is disabled');
+    }
+
     const chainConfig = getChainConfig(chain, useTestnet);
     const connectionKey = `${chain}:${chainConfig.isTestnet ? 'testnet' : 'mainnet'}`;
 
