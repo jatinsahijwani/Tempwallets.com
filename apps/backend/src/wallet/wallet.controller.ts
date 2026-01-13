@@ -23,6 +23,7 @@ import {
 } from './dto/wallet.dto.js';
 import { PolkadotEvmRpcService } from './services/polkadot-evm-rpc.service.js';
 import { SubstrateChainKey } from './substrate/config/substrate-chain.config.js';
+import { AllChainTypes } from './types/chain.types.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { OptionalAuth } from '../auth/decorators/optional-auth.decorator.js';
 import { UserId } from '../auth/decorators/user-id.decorator.js';

@@ -378,6 +378,9 @@ export function LightningNodeDetails({ lightningNodeId, onClose }: LightningNode
                 <X className="mr-2 h-4 w-4" />
               )}
               Close Node
+              <span className="ml-2 text-[10px] bg-gray-200 px-2 py-0.5 rounded-full">
+                Coming Soon
+              </span>
             </Button>
           </div>
         )}

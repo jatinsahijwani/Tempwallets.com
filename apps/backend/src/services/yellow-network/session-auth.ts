@@ -525,7 +525,9 @@ export class SessionKeyAuth {
       },
       message: {
         challenge: challengeMessage,
-        scope: authParams.scope || 'transfer,app.create,app.submit',
+        scope:
+          authParams.scope ||
+          'transfer,app.create,app.submit,channel.create,channel.update,channel.close',
         wallet: getAddress(authParams.address), // Ensure checksummed
         session_key: getAddress(authParams.session_key), // Ensure checksummed
         expires_at: authParams.expires_at,
