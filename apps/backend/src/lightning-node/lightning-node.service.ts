@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+// Force rebuild
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service.js';
 import {
@@ -32,6 +33,7 @@ import type {
   AuthenticateWalletDto,
   SearchSessionDto,
   FundChannelDto,
+  WithdrawFundsDto,
 } from './dto/index.js';
 import { SeedRepository } from '../wallet/seed.repository.js';
 import { WalletService } from '../wallet/wallet.service.js';
@@ -1524,6 +1526,70 @@ export class LightningNodeService {
       (remoteSession.allocations || []) as any;
 
     await nitroliteClient.depositToLightningNode(
+      node.appSessionId as `0x${string}`,
+      dto.participantAddress as Address,
+      dto.asset,
+      dto.amount,
+      currentAllocations,
+    );
+
+    // Refresh remote state and persist balances best-effort
+    const updated = await nitroliteClient.getLightningNode(
+      node.appSessionId as `0x${string}`,
+    );
+    const updatedAllocations: AppSessionAllocation[] = (updated.allocations ||
+      []) as any;
+
+    for (const alloc of updatedAllocations) {
+      await this.prisma.lightningNodeParticipant.updateMany({
+        where: {
+          lightningNodeId: node.id,
+          address: (alloc as any).participant,
+          asset: dto.asset,
+        },
+        data: { balance: (alloc as any).amount } as any,
+      });
+    }
+
+    return { ok: true };
+  }
+
+  /**
+   * Withdraw funds from a Lightning Node (gasless) via Yellow.
+   * Moves funds from app session back to unified balance.
+   * Persists the returned allocations to local DB (best-effort).
+   */
+  async withdraw(dto: WithdrawFundsDto) {
+    const node = await this.prisma.lightningNode.findUnique({
+      where: { appSessionId: dto.appSessionId },
+      include: { participants: true },
+    });
+    if (!node)
+      throw new NotFoundException(
+        `Lightning Node not found: ${dto.appSessionId}`,
+      );
+
+    const {
+      address: userWalletAddress,
+      isEOA,
+      chainKey,
+    } = await this.getUserWalletAddress(dto.userId, node.chain);
+
+    const nitroliteClient = await this.getUserNitroliteClient(
+      dto.userId,
+      node.chain,
+      userWalletAddress,
+      isEOA,
+      chainKey,
+    );
+
+    const remoteSession = await nitroliteClient.getLightningNode(
+      node.appSessionId as `0x${string}`,
+    );
+    const currentAllocations: AppSessionAllocation[] =
+      (remoteSession.allocations || []) as any;
+
+    await nitroliteClient.withdrawFromLightningNode(
       node.appSessionId as `0x${string}`,
       dto.participantAddress as Address,
       dto.asset,
