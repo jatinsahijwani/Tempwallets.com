@@ -12,7 +12,8 @@ import { HealthController } from './health.controller.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      // Don't specify envFilePath - let it use process.env in production
+      envFilePath: process.env.NODE_ENV === 'production' ? undefined : '.env',
     }),
     PrismaModule,
     WalletModule,
