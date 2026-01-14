@@ -60,7 +60,6 @@ const getExplorerUrl = (txHash: string, chain: string, isTestnet: boolean = fals
   // EVM chains (testnet support)
   const evmExplorers: Record<string, { mainnet: string; testnet?: string }> = {
     ethereum: { mainnet: 'https://etherscan.io', testnet: 'https://sepolia.etherscan.io' },
-    sepolia: { mainnet: 'https://sepolia.etherscan.io' }, // Sepolia testnet
     base: { mainnet: 'https://basescan.org', testnet: 'https://sepolia.basescan.org' },
     arbitrum: { mainnet: 'https://arbiscan.io', testnet: 'https://sepolia.arbiscan.io' },
     polygon: { mainnet: 'https://polygonscan.com', testnet: 'https://mumbai.polygonscan.com' },

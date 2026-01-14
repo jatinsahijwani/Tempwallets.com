@@ -6,5 +6,4 @@ export * from './authenticate-wallet.dto.js';
 export * from './search-session.dto.js';
 export * from './fund-channel.dto.js';
 export * from './withdraw-funds.dto.js';
-// Legacy - will be removed
 export * from './join-lightning-node.dto.js';

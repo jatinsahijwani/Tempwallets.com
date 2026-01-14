@@ -65,7 +65,6 @@ export class WalletService {
     | 'arbitrum'
     | 'polygon'
     | 'avalanche'
-    | 'sepolia'
     | 'moonbeamTestnet'
     | 'astarShibuya'
     | 'paseoPassetHub'
@@ -79,7 +78,6 @@ export class WalletService {
     'arbitrum',
     'polygon',
     'avalanche',
-    'sepolia',
     'moonbeamTestnet',
     'astarShibuya',
     'paseoPassetHub',
@@ -575,7 +573,6 @@ export class WalletService {
       arbitrum: 'Arbitrum',
       polygon: 'Polygon',
       avalanche: 'Avalanche',
-      sepolia: 'Sepolia Testnet',
       tron: 'Tron',
       bitcoin: 'Bitcoin',
       solana: 'Solana',
@@ -2465,23 +2462,9 @@ export class WalletService {
       throw new BadRequestException(`Unsupported EIP-7702 chainId: ${chainId}`);
     }
 
-    // ✅ FIX: For base chain, always allow EIP-7702 (natively supported)
-    // For other chains, check environment configuration
-    const isBaseChain = chain === 'base';
-    const isEip7702Enabled = this.pimlicoConfig.isEip7702Enabled(chain);
-    
-    if (!isEip7702Enabled && !isBaseChain) {
+    if (!this.pimlicoConfig.isEip7702Enabled(chain)) {
       throw new BadRequestException(
         `EIP-7702 is not enabled for chain ${chain}. Enable via config before sending gasless transactions.`,
-      );
-    }
-    
-    // Log warning for base if env vars not set, but continue
-    if (isBaseChain && !isEip7702Enabled) {
-      this.logger.warn(
-        `EIP-7702 not explicitly enabled for base via env vars, but base chain supports EIP-7702 natively. ` +
-        `Continuing with EIP-7702 support. ` +
-        `To avoid this warning, set ENABLE_EIP7702=true and EIP7702_CHAINS=base in production.`,
       );
     }
 

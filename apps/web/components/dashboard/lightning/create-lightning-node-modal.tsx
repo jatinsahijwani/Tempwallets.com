@@ -32,7 +32,6 @@ interface CreateLightningNodeModalProps {
 }
 
 const SUPPORTED_CHAINS = [
-  { id: 'sepolia', name: 'Sepolia Testnet' },
   { id: 'base', name: 'Base' },
   { id: 'arbitrum', name: 'Arbitrum' },
 ];
@@ -135,7 +134,7 @@ export function CreateLightningNodeModal({ open, onOpenChange, onJoined }: Creat
 
     // Validate chain (required)
     if (!selectedChain || !SUPPORTED_CHAINS.find(c => c.id === selectedChain)) {
-      setError('Please select a network (Sepolia, Base, or Arbitrum)');
+      setError('Please select a network (Base or Arbitrum)');
       return;
     }
 

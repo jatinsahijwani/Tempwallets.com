@@ -692,41 +692,6 @@ const RAW_WALLET_CONFIGS: WalletConfig[] = [
   // TESTNETS
   // ========================================
   {
-    id: 'sepolia',
-    name: 'Sepolia',
-    symbol: 'ETH',
-    description: 'Sepolia Testnet - Yellow Network Lightning Node Support',
-    type: 'evm',
-    chainId: 11155111,
-    isTestnet: true,
-    category: 'layer1',
-    visible: true,
-    icon: Ethereum,
-    priority: 100,
-    color: '#627EEA',
-    capabilities: {
-      walletConnect: true,
-      send: true,
-      receive: true,
-      copy: true,
-      balanceFetch: true,
-      transactionHistory: true,
-      nativeToken: true,
-      tokenTransfers: true,
-      lightningNodes: true, // Yellow Network SDK support enabled
-    },
-    features: {
-      showInSelector: true,
-      showInWalletList: true,
-      enabledInProd: true,
-      enabledInDev: true,
-      advancedOnly: false,
-    },
-    group: 'evm-testnet',
-    parentChain: 'ethereum',
-    isSmartAccount: false,
-  },
-  {
     id: 'moonbeamTestnet',
     name: 'Moonbeam Testnet',
     symbol: 'DEV',

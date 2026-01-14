@@ -64,7 +64,6 @@ const NATIVE_TOKEN_SYMBOLS: Record<string, string> = {
   polygon: 'MATIC',
   solana: 'SOL',
   avalanche: 'AVAX',
-  sepolia: 'ETH', // Sepolia testnet
   // Legacy/internal fallbacks
   tron: 'TRX',
   bitcoin: 'BTC',
