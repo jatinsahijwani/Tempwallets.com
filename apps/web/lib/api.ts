@@ -378,6 +378,41 @@ export const walletApi = {
   /**
    * Create or import a wallet seed phrase
    */
+  
+ async authorizeChange(): Promise<{
+  success: boolean;
+  allowed: boolean;
+  remainingAttempts?: number;
+  resetsAt?: string;
+}> {
+  try {
+    return await fetchApi('/wallet/change/authorize', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch (error: any) {
+    // Default fallback
+    let status = error?.status || 500;
+    let retryAfterSeconds: number | undefined;
+    let message = error?.message || 'Unknown error';
+
+    // Try different places where backend JSON might be
+    const data =
+      (await error?.response?.json?.().catch(() => null)) ||
+      error?.data ||
+      error;
+
+    if (data?.retryAfterSeconds) {
+      retryAfterSeconds = data.retryAfterSeconds;
+      message = data.message || message;
+    }
+
+    throw { status, retryAfterSeconds, message };
+  }
+},
+
+
+
   async createOrImportSeed(data: CreateOrImportSeedRequest): Promise<CreateOrImportSeedResponse> {
     return fetchApi<CreateOrImportSeedResponse>('/wallet/seed', {
       method: 'POST',

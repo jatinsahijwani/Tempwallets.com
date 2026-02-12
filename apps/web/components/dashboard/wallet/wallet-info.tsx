@@ -161,7 +161,23 @@ const WalletInfo = () => {
     if (action === 'change') {
       // Track change button click
       trackChangeButton.clicked();
-      
+
+      try {
+        // 🔐 Step 1: Authorize
+        await walletApi.authorizeChange();
+      } catch (error: any) {
+        // Rate limit exceeded
+        if (error?.status === 429) {
+          //frontend for try again after 24 hours
+          alert('You have reached the wallet change limit(100). Please try again in 24 Hours.');
+        } else {
+          alert(error?.message || 'Something went wrong.');
+        }
+
+        return; // Stop further execution
+      }
+
+
       // Get the current values at click time
       const currentUserId = userId;
       const currentIsAuthenticated = isAuthenticated;
@@ -208,7 +224,7 @@ const WalletInfo = () => {
         if (newWallet) {
           trackWalletGeneration.success(newWallet.address, selectedChainId, duration);
         }
-      }
+      } 
     } else if (action === 'copy' && currentWallet) {
       await copyToClipboard(currentWallet.address);
     } else if (action === 'send') {
